@@ -21,19 +21,23 @@ public class UserController {
     @GetMapping("/users")
     public static List<UserSDTO> getAllMockUsers() {
         return Arrays.asList(
-        new UserSDTO(1L, "Ajay Kumar", "ajay@example.com"),
-        new UserSDTO(2L, "Sonal Mehta", "sonal@example.com"),
-        new UserSDTO(3L, "Rahul Sharma", "rahul@example.com"),
-        new UserSDTO(4L, "Nikita Das", "nikita@example.com"),
-        new UserSDTO(101L, "Pankaj Kumar", "pankaj@example.com"),
-        new UserSDTO(102L, "Amit Kumar", "amit@example.com"),
-        new UserSDTO(103L, "Rohit Sharma", "rohit@example.com"),
-        new UserSDTO(110L, "Alice Johnson", "alice.johnson@example.com"),
-        new UserSDTO(112L, "Bob Smith", "bob.smith@example.com"),
-        new UserSDTO(113L, "Carol Williams", "carol.williams@example.com"),
-        new UserSDTO(114L, "David Lee", "david.lee@example.com"),
-        new UserSDTO(115L, "Eva Brown", "eva.brown@example.com"),
-        new UserSDTO(116L, "John Doe", "john.doe@example.com")
+        new UserSDTO(1L, "Ajay Kumar"),
+        new UserSDTO(2L, "Sonal Mehta"),
+        new UserSDTO(3L, "Rahul Sharma"),
+        new UserSDTO(4L, "Nikita Das"),
+        new UserSDTO(101L, "Pankaj Kumar"),
+        new UserSDTO(102L, "Amit Kumar"),
+        new UserSDTO(103L, "Rohit Sharma"),
+        new UserSDTO(110L, "Alice Johnson"),
+        new UserSDTO(112L, "Bob Smith"),
+        new UserSDTO(113L, "Carol Williams"),
+        new UserSDTO(114L, "David Lee"),
+        new UserSDTO(115L, "Eva Brown"),
+        new UserSDTO(116L, "John Doe"),
+        new UserSDTO(117L, "Jane Smith"),
+        new UserSDTO(118L, "Mark Johnson"),
+        new UserSDTO(119L, "Emily Davis"),
+        new UserSDTO(120L, "Michael Wilson")
         );
     }
     

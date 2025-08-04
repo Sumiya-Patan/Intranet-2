@@ -81,8 +81,8 @@ public class TimeSheetService {
     return timesheets.stream().map(ts -> {
         TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
         dto.setTimesheetId(ts.getTimesheetId());
+        dto.setUserId(ts.getUserId());
         dto.setWorkDate(ts.getWorkDate());
-        dto.setCreatedAt(ts.getCreatedAt());
         dto.setStatus(ts.getStatus());
 
         // Map entries
