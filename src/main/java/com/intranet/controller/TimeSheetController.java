@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.intranet.dto.TimeSheetEntryDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
-import com.intranet.dto.UserDTO;
 import com.intranet.service.TimeSheetService;
 
 // @CrossOrigin(origins = "*", allowedHeaders = "*")

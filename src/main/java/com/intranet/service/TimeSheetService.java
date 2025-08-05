@@ -18,8 +18,6 @@ import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
-import com.intranet.service.external.ProjectManagementService;
-
 import jakarta.transaction.Transactional;
 
 @Service
@@ -30,9 +28,6 @@ public class TimeSheetService {
 
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
-
-    @Autowired
-    private  ProjectManagementService projectManagementService;
     
   public void createTimeSheetWithEntries(
         Long userId,

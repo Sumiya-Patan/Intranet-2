@@ -1,6 +1,5 @@
 package com.intranet.service.external;
 
-import com.intranet.dto.external.ManagerInfoDTO;
 import com.intranet.dto.external.ManagerProjectInfoDTO;
 
 import org.springframework.stereotype.Service;
