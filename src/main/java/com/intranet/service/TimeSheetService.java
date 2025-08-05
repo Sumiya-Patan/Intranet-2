@@ -6,9 +6,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,9 +16,9 @@ import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
-import com.intranet.entity.TimeSheetReview;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.service.external.ProjectManagementService;
 
 import jakarta.transaction.Transactional;
 
@@ -33,6 +30,9 @@ public class TimeSheetService {
 
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
+
+    @Autowired
+    private  ProjectManagementService projectManagementService;
     
   public void createTimeSheetWithEntries(
         Long userId,
