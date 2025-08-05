@@ -7,9 +7,11 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.UserDTO;
 import com.intranet.dto.UserSDTO;
+import com.intranet.security.CurrentUser;
 
-@CrossOrigin(origins = "*", allowedHeaders = "*")
+// @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 public class UserController {
 
@@ -39,6 +41,11 @@ public class UserController {
         new UserSDTO(119L, "Emily Davis"),
         new UserSDTO(120L, "Michael Wilson")
         );
+    }
+
+    @GetMapping("/me")
+    public UserDTO getUserInfo(@CurrentUser UserDTO user) {
+        return user;
     }
     
 }

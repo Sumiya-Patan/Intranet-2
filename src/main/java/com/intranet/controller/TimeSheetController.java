@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.intranet.dto.TimeSheetEntryDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
+import com.intranet.dto.UserDTO;
+import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
 // @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -28,27 +30,27 @@ public class TimeSheetController {
     @Autowired
     private TimeSheetService timeSheetService;
     
-   @PostMapping("/create/{userId}")
+   @PostMapping("/create")
     public ResponseEntity<String> submitTimeSheet(
             @RequestParam(value = "workDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
             @RequestBody List<TimeSheetEntryDTO> entries,
-            @PathVariable Long userId) {
+            @CurrentUser UserDTO user) {
         // If no workDate is passed, use today's date
         if (workDate == null) {
             workDate = LocalDate.now();
         }
         try {
-            timeSheetService.createTimeSheetWithEntries(userId, workDate, entries);
+            timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
             return ResponseEntity.ok("Timesheet submitted successfully.");
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 
-    @GetMapping("/history/{userId}")
-    public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(
-            @PathVariable Long userId) {
-        List<TimeSheetResponseDTO> history = timeSheetService.getUserTimeSheetHistory(userId);
+    @GetMapping("/history")
+    public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(@CurrentUser UserDTO user) {
+            // @PathVariable Long userId , @CurrentUser UserDTO user) {
+        List<TimeSheetResponseDTO> history = timeSheetService.getUserTimeSheetHistory(user.getId());
         return ResponseEntity.ok(history);
     }
 
