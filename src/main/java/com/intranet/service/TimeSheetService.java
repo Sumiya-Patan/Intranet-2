@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,11 +16,14 @@ import com.intranet.dto.TimeSheetEntryResponseDTO;
 import com.intranet.dto.TimeSheetEntryUpdateDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
+import com.intranet.dto.external.ProjectTaskView;
+import com.intranet.dto.external.TaskDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import jakarta.transaction.Transactional;
+import java.util.Map;
 
 @Service
 public class TimeSheetService {
@@ -144,5 +149,84 @@ public class TimeSheetService {
     timesheet.setUpdatedAt(LocalDateTime.now());
     timeSheetRepository.save(timesheet);
 }
+
+public List<ProjectTaskView> getUserTaskView(Long userId) {
+        List<Map<String, Object>> ownedProjects = getMockOwnedProjects();
+        List<Map<String, Object>> memberProjects = getMockMemberProjects();
+        List<Map<String, Object>> tasks = getMockAssignedTasks();
+
+        // Map projectId → project name
+        Map<Long, String> projectIdToName = new HashMap<>();
+        ownedProjects.forEach(proj -> projectIdToName.put(((Number) proj.get("id")).longValue(), (String) proj.get("name")));
+        memberProjects.forEach(proj -> projectIdToName.put(((Number) proj.get("id")).longValue(), (String) proj.get("name")));
+
+        Map<String, List<TaskDTO>> projectTaskMap = new HashMap<>();
+
+        for (Map<String, Object> task : tasks) {
+            String title = (String) task.get("title");
+            String description = (String) task.get("description");
+
+            Long projectId = ((Number) task.get("projectId")).longValue();
+            String projectName = projectIdToName.getOrDefault(projectId, "Unknown Project");
+
+            Map<String, Object> sprint = (Map<String, Object>) task.get("sprint");
+            String startTime = sprint != null ? sprint.get("startDate").toString() : "";
+            String endTime = sprint != null ? sprint.get("endDate").toString() : "";
+
+            TaskDTO dto = new TaskDTO(title, description, startTime, endTime);
+            projectTaskMap.computeIfAbsent(projectName, k -> new ArrayList<>()).add(dto);
+        }
+
+        List<ProjectTaskView> response = new ArrayList<>();
+        projectTaskMap.forEach((project, taskList) -> response.add(new ProjectTaskView(project, taskList)));
+        return response;
+    }
+
+    // ------- MOCK DATA METHODS -------
+
+    private List<Map<String, Object>> getMockOwnedProjects() {
+        return Arrays.asList(
+            mockProject(101L, "Tomo AI Platform"),
+            mockProject(102L, "Internal Portal Revamp")
+        );
+    }
+
+    private List<Map<String, Object>> getMockMemberProjects() {
+        return Arrays.asList(
+            mockProject(103L, "Website Redesign"),
+            mockProject(104L, "Client Integration Layer")
+        );
+    }
+
+    private List<Map<String, Object>> getMockAssignedTasks() {
+        return Arrays.asList(
+            mockTask("Define API schema", "Design all endpoint contracts", 101L, "2025-08-01", "2025-08-03"),
+            mockTask("Design login screen", "React UI for login", 102L, "2025-08-02", "2025-08-05"),
+            mockTask("Frontend setup", "Initial project structure in Vite", 103L, "2025-08-04", "2025-08-06"),
+            mockTask("Webhook handler", "Handle incoming webhooks", 104L, "2025-08-03", "2025-08-08")
+        );
+    }
+
+    private Map<String, Object> mockProject(Long id, String name) {
+        Map<String, Object> project = new HashMap<>();
+        project.put("id", id);
+        project.put("name", name);
+        return project;
+    }
+
+    private Map<String, Object> mockTask(String title, String description, Long projectId, String startDate, String endDate) {
+        Map<String, Object> task = new HashMap<>();
+        task.put("title", title);
+        task.put("description", description);
+        task.put("projectId", projectId);
+
+        Map<String, Object> sprint = new HashMap<>();
+        sprint.put("startDate", startDate);
+        sprint.put("endDate", endDate);
+        task.put("sprint", sprint);
+
+        return task;
+    }
+
 
 }

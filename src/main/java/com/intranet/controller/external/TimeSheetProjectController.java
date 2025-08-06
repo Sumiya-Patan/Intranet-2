@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,10 +19,12 @@ import com.intranet.dto.UserSDTO;
 import com.intranet.dto.external.ManagerInfoDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectManagerInfoDTO;
+import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.service.TimeSheetService;
 import com.intranet.service.external.ExternalProjectApiService;
 
 import lombok.RequiredArgsConstructor;
@@ -40,6 +43,9 @@ public class TimeSheetProjectController {
 
     @Autowired
     private final ExternalProjectApiService externalProjectApiService;
+
+    @Autowired
+    private final TimeSheetService timesheetService;
 
     @GetMapping("/projects")
     public ResponseEntity<List<ProjectManagerInfoDTO>> getProjectAndManagerInfoFromTimesheets() {
@@ -112,5 +118,11 @@ public class TimeSheetProjectController {
             .toList();
 
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/projects/{userId}")
+    public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@PathVariable Long userId) {
+        List<ProjectTaskView> response = timesheetService.getUserTaskView(userId);
+        return ResponseEntity.ok(response);
     }
 }
