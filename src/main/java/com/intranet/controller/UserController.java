@@ -11,7 +11,7 @@ import com.intranet.dto.UserDTO;
 import com.intranet.dto.UserSDTO;
 import com.intranet.security.CurrentUser;
 
-// @CrossOrigin(origins = "*", allowedHeaders = "*")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 public class UserController {
 
