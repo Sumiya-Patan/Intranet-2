@@ -75,6 +75,11 @@ public class TimeSheetReviewController {
             return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED");
         }
 
+        // get comment from request if status is REJECTED
+        if (status.equalsIgnoreCase("REJECTED") && request.getComment() == null) {
+            return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
+        }
+
         timeSheet.setStatus(status);
         timeSheet.setUpdatedAt(LocalDateTime.now());
 
