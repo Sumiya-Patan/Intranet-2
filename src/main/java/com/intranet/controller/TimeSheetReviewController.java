@@ -1,4 +1,4 @@
-package com.intranet.controller.external;
+package com.intranet.controller;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.intranet.dto.external.ManagerInfoDTO;
@@ -24,14 +25,14 @@ import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.service.external.ExternalProjectApiService;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 @RequestMapping("/api/timesheets")
 @RequiredArgsConstructor
-// @NoArgsConstructor
-// @AllArgsConstructor
 public class TimeSheetReviewController {
 
     @Autowired
@@ -43,10 +44,10 @@ public class TimeSheetReviewController {
     @Autowired
     private final ExternalProjectApiService externalProjectApiService;
 
-    @PutMapping("/review/{managerId}/{status}")
+    @PutMapping("/review/{managerId}")
     public ResponseEntity<String> reviewTimesheet(
             @PathVariable Long managerId,
-            @PathVariable String status,
+            @RequestParam String status,
             @RequestBody TimeSheetReviewRequest request
     ) {
         TimeSheet timeSheet = timeSheetRepository.findById(request.getTimesheetId())
@@ -70,11 +71,11 @@ public class TimeSheetReviewController {
         }
 
         // Update the status
-        if (!status.equalsIgnoreCase("APPROVED") && !status.equalsIgnoreCase("REJECTED")) {
+        if (!status.equalsIgnoreCase("Approved") && !status.equalsIgnoreCase("Rejected")) {
             return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED");
         }
 
-        timeSheet.setStatus(status.toUpperCase());
+        timeSheet.setStatus(status);
         timeSheet.setUpdatedAt(LocalDateTime.now());
 
         // Save the updated timesheet
