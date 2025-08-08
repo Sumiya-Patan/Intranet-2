@@ -155,28 +155,47 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
 
         // Map projectId → project name
         Map<Long, String> projectIdToName = new HashMap<>();
-        ownedProjects.forEach(proj -> projectIdToName.put(((Number) proj.get("id")).longValue(), (String) proj.get("name")));
-        memberProjects.forEach(proj -> projectIdToName.put(((Number) proj.get("id")).longValue(), (String) proj.get("name")));
+        ownedProjects.forEach(proj -> projectIdToName.put(
+            ((Number) proj.get("id")).longValue(),
+            (String) proj.get("name"))
+        );
+        memberProjects.forEach(proj -> projectIdToName.put(
+            ((Number) proj.get("id")).longValue(),
+            (String) proj.get("name"))
+        );
 
-        Map<String, List<TaskDTO>> projectTaskMap = new HashMap<>();
+        // Group tasks by projectId
+        Map<Long, List<TaskDTO>> projectIdToTasks = new HashMap<>();
 
         for (Map<String, Object> task : tasks) {
+            Long taskId = ((Number) task.get("id")).longValue();
             String title = (String) task.get("title");
             String description = (String) task.get("description");
 
             Long projectId = ((Number) task.get("projectId")).longValue();
-            String projectName = projectIdToName.getOrDefault(projectId, "Unknown Project");
+            String startTime = "";
+            String endTime = "";
 
             Map<String, Object> sprint = (Map<String, Object>) task.get("sprint");
-            String startTime = sprint != null ? sprint.get("startDate").toString() : "";
-            String endTime = sprint != null ? sprint.get("endDate").toString() : "";
+            if (sprint != null) {
+                startTime = sprint.get("startDate").toString();
+                endTime = sprint.get("endDate").toString();
+            }
 
-            TaskDTO dto = new TaskDTO(title, description, startTime, endTime);
-            projectTaskMap.computeIfAbsent(projectName, k -> new ArrayList<>()).add(dto);
+            TaskDTO dto = new TaskDTO(taskId, title, description, startTime, endTime);
+            projectIdToTasks.computeIfAbsent(projectId, k -> new ArrayList<>()).add(dto);
         }
 
+        // Final response construction
         List<ProjectTaskView> response = new ArrayList<>();
-        projectTaskMap.forEach((project, taskList) -> response.add(new ProjectTaskView(project, taskList)));
+        for (Map.Entry<Long, List<TaskDTO>> entry : projectIdToTasks.entrySet()) {
+            Long projectId = entry.getKey();
+            String projectName = projectIdToName.getOrDefault(projectId, "Unknown Project");
+            List<TaskDTO> taskList = entry.getValue();
+
+            response.add(new ProjectTaskView(projectId, projectName, taskList));
+        }
+
         return response;
     }
 
@@ -197,13 +216,25 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
     }
 
     private List<Map<String, Object>> getMockAssignedTasks() {
-        return Arrays.asList(
-            mockTask("Define API schema", "Design all endpoint contracts", 101L, "2025-08-01", "2025-08-03"),
-            mockTask("Design login screen", "React UI for login", 102L, "2025-08-02", "2025-08-05"),
-            mockTask("Frontend setup", "Initial project structure in Vite", 103L, "2025-08-04", "2025-08-06"),
-            mockTask("Webhook handler", "Handle incoming webhooks", 104L, "2025-08-03", "2025-08-08")
-        );
-    }
+    return Arrays.asList(
+        // Project 101 - Tomo AI Platform
+        mockTask(201L, "Define API schema", "Design all endpoint contracts", 101L, "2025-08-01", "2025-08-03"),
+        mockTask(202L, "Setup DB models", "JPA entities and relationships", 101L, "2025-08-03", "2025-08-05"),
+        mockTask(203L, "Auth flow", "JWT-based login/signup", 101L, "2025-08-06", "2025-08-08"),
+
+        // Project 102 - Internal Portal Revamp
+        mockTask(204L, "Design login screen", "React UI for login", 102L, "2025-08-02", "2025-08-05"),
+        mockTask(205L, "Theme system", "Add Tailwind-based theming", 102L, "2025-08-06", "2025-08-07"),
+
+        // Project 103 - Website Redesign
+        mockTask(206L, "Frontend setup", "Initial project structure in Vite", 103L, "2025-08-04", "2025-08-06"),
+
+        // Project 104 - Client Integration Layer
+        mockTask(207L, "Webhook handler", "Handle incoming webhooks", 104L, "2025-08-03", "2025-08-08"),
+        mockTask(208L, "API throttling", "Rate limit sensitive endpoints", 104L, "2025-08-09", "2025-08-11")
+    );
+}
+
 
     private Map<String, Object> mockProject(Long id, String name) {
         Map<String, Object> project = new HashMap<>();
@@ -212,8 +243,9 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         return project;
     }
 
-    private Map<String, Object> mockTask(String title, String description, Long projectId, String startDate, String endDate) {
+    private Map<String, Object> mockTask(Long id, String title, String description, Long projectId, String startDate, String endDate) {
         Map<String, Object> task = new HashMap<>();
+        task.put("id", id);
         task.put("title", title);
         task.put("description", description);
         task.put("projectId", projectId);

@@ -120,7 +120,7 @@ public class TimeSheetProjectController {
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/projects/{userId}")
+    @GetMapping("/{userId}")
     public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@PathVariable Long userId) {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(userId);
         return ResponseEntity.ok(response);
