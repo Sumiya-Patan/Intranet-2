@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TimeSheetUpdateRequestDTO {
     private LocalDate workDate;
-    private String status;
+    // private String status;
 
     private List<TimeSheetEntryUpdateDTO> entries;
 }

@@ -11,6 +11,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
 import com.intranet.dto.TimeSheetEntryDTO;
 import com.intranet.dto.TimeSheetEntryResponseDTO;
 import com.intranet.dto.TimeSheetEntryUpdateDTO;
@@ -24,6 +25,7 @@ import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import jakarta.transaction.Transactional;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -84,7 +86,7 @@ public class TimeSheetService {
         dto.setTimesheetId(ts.getTimesheetId());
         dto.setUserId(ts.getUserId());
         dto.setWorkDate(ts.getWorkDate());
-        dto.setStatus(ts.getStatus());
+        
 
         // Map entries
         List<TimeSheetEntryResponseDTO> entryDTOs = ts.getEntries().stream().map(entry -> {
@@ -115,11 +117,6 @@ public class TimeSheetService {
     // 🗓 Update workDate if provided
     if (dto.getWorkDate() != null) {
         timesheet.setWorkDate(dto.getWorkDate());
-    }
-
-    // 🔄 Update status if provided
-    if (dto.getStatus() != null) {
-        timesheet.setStatus(dto.getStatus());
     }
 
     // 🔄 Update entries
@@ -237,7 +234,7 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         dto.setTimesheetId(timeSheet.getTimesheetId());
         dto.setUserId(timeSheet.getUserId());
         dto.setWorkDate(timeSheet.getWorkDate());
-        dto.setStatus(timeSheet.getStatus());
+        
 
         List<TimeSheetEntryResponseDTO> entryDTOs = timeSheet.getEntries().stream().map(entry -> {
             TimeSheetEntryResponseDTO entryDTO = new TimeSheetEntryResponseDTO();
@@ -248,7 +245,12 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
             entryDTO.setWorkType(entry.getWorkType());
             entryDTO.setFromTime(entry.getFromTime());
             entryDTO.setToTime(entry.getToTime());
-            entryDTO.setHoursWorked(entry.getHoursWorked());
+            if (entryDTO.getFromTime() != null && entryDTO.getToTime() != null) {
+            long minutes = Duration.between(entryDTO.getFromTime(), entryDTO.getToTime()).toMinutes();
+            entryDTO.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
+        } else if (entryDTO.getHoursWorked() == null) {
+            entryDTO.setHoursWorked(BigDecimal.ZERO);
+        }
             entryDTO.setOtherDescription(entry.getOtherDescription());
             return entryDTO;
         }).collect(Collectors.toList());
@@ -258,4 +260,42 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         return dto;
     }
 
+
+    public boolean addEntriesToTimeSheet(Long timesheetId, List<TimeSheetEntryCreateRequestDTO> newEntries) {
+        Optional<TimeSheet> optional = timeSheetRepository.findById(timesheetId);
+        if (optional.isEmpty()) {
+            return false;
+        }
+
+        TimeSheet timeSheet = optional.get();
+
+        for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
+            TimeSheetEntry entry = new TimeSheetEntry();
+            entry.setTimeSheet(timeSheet);
+            entry.setProjectId(dto.getProjectId());
+            entry.setTaskId(dto.getTaskId());
+            entry.setDescription(dto.getDescription());
+            entry.setWorkType(dto.getWorkType());
+
+            // Calculate hoursWorked from fromTime and toTime
+            if (dto.getFromTime() != null && dto.getToTime() != null && !dto.getToTime().isBefore(dto.getFromTime())) {
+                Duration duration = Duration.between(dto.getFromTime(), dto.getToTime());
+                double hours = duration.toMinutes() / 60.0;
+                entry.setHoursWorked(BigDecimal.valueOf(hours));
+            } else {
+                entry.setHoursWorked(BigDecimal.ZERO); // fallback or default
+            }
+
+            entry.setFromTime(dto.getFromTime());
+            entry.setToTime(dto.getToTime());
+            entry.setOtherDescription(dto.getOtherDescription());
+
+            timeSheet.getEntries().add(entry);
+        }
+
+        timeSheet.setUpdatedAt(LocalDateTime.now());
+
+        timeSheetRepository.save(timeSheet);
+        return true;
+    }
 }

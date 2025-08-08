@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
 import com.intranet.dto.TimeSheetEntryDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
@@ -74,5 +75,18 @@ public class TimeSheetController {
     @GetMapping("/{id}")
     public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id) {
         return timeSheetService.getTimeSheetById(id);
+    }
+
+    @PutMapping("/add-entry/{timesheetId}")
+    public ResponseEntity<String> addEntriesToTimeSheet(
+            @PathVariable Long timesheetId,
+            @RequestBody List<TimeSheetEntryCreateRequestDTO> newEntries) {
+
+        boolean success = timeSheetService.addEntriesToTimeSheet(timesheetId, newEntries);
+        if (success) {
+            return ResponseEntity.ok("New entry(ies) added to timesheet: " + timesheetId);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 }
