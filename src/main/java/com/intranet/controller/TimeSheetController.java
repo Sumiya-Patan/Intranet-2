@@ -69,4 +69,10 @@ public class TimeSheetController {
         return ResponseEntity.internalServerError().body("Unexpected error: " + e.getMessage());
     }
     }
+
+    
+    @GetMapping("/{id}")
+    public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id) {
+        return timeSheetService.getTimeSheetById(id);
+    }
 }
