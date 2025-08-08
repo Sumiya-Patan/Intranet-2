@@ -24,6 +24,7 @@ import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import jakarta.transaction.Transactional;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class TimeSheetService {
@@ -258,6 +259,35 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         task.put("sprint", sprint);
 
         return task;
+    }
+
+    public TimeSheetResponseDTO getTimeSheetById(Long id) {
+        TimeSheet timeSheet = timeSheetRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Timesheet not found with id: " + id));
+
+        TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
+        dto.setTimesheetId(timeSheet.getTimesheetId());
+        dto.setUserId(timeSheet.getUserId());
+        dto.setWorkDate(timeSheet.getWorkDate());
+        dto.setStatus(timeSheet.getStatus());
+
+        List<TimeSheetEntryResponseDTO> entryDTOs = timeSheet.getEntries().stream().map(entry -> {
+            TimeSheetEntryResponseDTO entryDTO = new TimeSheetEntryResponseDTO();
+            entryDTO.setTimesheetEntryId(entry.getTimesheetEntryId());
+            entryDTO.setProjectId(entry.getProjectId());
+            entryDTO.setTaskId(entry.getTaskId());
+            entryDTO.setDescription(entry.getDescription());
+            entryDTO.setWorkType(entry.getWorkType());
+            entryDTO.setFromTime(entry.getFromTime());
+            entryDTO.setToTime(entry.getToTime());
+            entryDTO.setHoursWorked(entry.getHoursWorked());
+            entryDTO.setOtherDescription(entry.getOtherDescription());
+            return entryDTO;
+        }).collect(Collectors.toList());
+
+        dto.setEntries(entryDTOs);
+
+        return dto;
     }
 
 }
