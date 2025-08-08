@@ -86,7 +86,7 @@ public class TimeSheetService {
         dto.setTimesheetId(ts.getTimesheetId());
         dto.setUserId(ts.getUserId());
         dto.setWorkDate(ts.getWorkDate());
-        
+        dto.setStatus(ts.getStatus());
 
         // Map entries
         List<TimeSheetEntryResponseDTO> entryDTOs = ts.getEntries().stream().map(entry -> {
@@ -266,7 +266,7 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         dto.setTimesheetId(timeSheet.getTimesheetId());
         dto.setUserId(timeSheet.getUserId());
         dto.setWorkDate(timeSheet.getWorkDate());
-        
+        dto.setStatus(timeSheet.getStatus());
 
         List<TimeSheetEntryResponseDTO> entryDTOs = timeSheet.getEntries().stream().map(entry -> {
             TimeSheetEntryResponseDTO entryDTO = new TimeSheetEntryResponseDTO();
