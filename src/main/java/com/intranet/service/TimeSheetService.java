@@ -300,6 +300,9 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         }
 
         TimeSheet timeSheet = optional.get();
+        if(timeSheet.getStatus().equals("Approved") || timeSheet.getStatus().equals("APPRO")) {    
+                return false;
+        }
 
         for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
             TimeSheetEntry entry = new TimeSheetEntry();
@@ -326,7 +329,7 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         }
 
         timeSheet.setUpdatedAt(LocalDateTime.now());
-
+        timeSheet.setStatus("Pending");
         timeSheetRepository.save(timeSheet);
         return true;
     }
