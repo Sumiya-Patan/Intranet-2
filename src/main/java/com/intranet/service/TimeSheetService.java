@@ -22,7 +22,10 @@ import com.intranet.dto.TimeSheetEntryResponseDTO;
 import com.intranet.dto.TimeSheetEntryUpdateDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
+import com.intranet.dto.UserSDTO;
+import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
+import com.intranet.dto.external.ProjectWithUsersDTO;
 import com.intranet.dto.external.TaskDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
@@ -30,6 +33,7 @@ import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import jakarta.transaction.Transactional;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -277,5 +281,49 @@ public class TimeSheetService {
 
     return new ArrayList<>(projectMap.values());
 }
+
+    public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
+
+        String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
+        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+
+        if (response.getBody() == null) {
+            return Collections.emptyList();
+        }
+
+        // Only keep projects where given user is a member
+        List<Map<String, Object>> filteredProjects = ((List<Map<String, Object>>) response.getBody()).stream()
+                .filter(p -> ((List<Map<String, Object>>) p.get("members")).stream()
+                        .anyMatch(m -> Objects.equals(((Number) m.get("id")).longValue(), userId)))
+                .toList();
+
+        // Group by manager
+        Map<Long, List<Map<String, Object>>> projectsByManager = filteredProjects.stream()
+                .collect(Collectors.groupingBy(
+                        p -> ((Number) ((Map<String, Object>) p.get("owner")).get("id")).longValue()
+                ));
+
+        // Build DTO
+        return projectsByManager.entrySet().stream()
+                .map(entry -> {
+                    Long managerId = entry.getKey();
+                    String managerName = (String) ((Map<String, Object>) entry.getValue().get(0).get("owner")).get("name");
+
+                    List<ProjectWithUsersDTO> projects = entry.getValue().stream()
+                            .map(p -> {
+                                Long projectId = ((Number) p.get("id")).longValue();
+                                String projectName = (String) p.get("name");
+
+                                // Only this user in "users"
+                                List<UserSDTO> users = List.of(new UserSDTO(userId, "Ajay default"));
+
+                                return new ProjectWithUsersDTO(projectId, projectName, users);
+                            })
+                            .toList();
+
+                    return new ManagerUserMappingDTO(managerId, managerName, projects);
+                })
+                .toList();
+    }
 
 }
