@@ -24,6 +24,8 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 @RequestMapping("/api/timesheet")
@@ -32,6 +34,7 @@ public class TimeSheetController {
     @Autowired
     private TimeSheetService timeSheetService;
     
+    @Operation(summary = "Create a new timesheet")
    @PostMapping("/create")
     public ResponseEntity<String> submitTimeSheet(
             @RequestParam(value = "workDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
@@ -49,6 +52,7 @@ public class TimeSheetController {
         }
     }
 
+    @Operation(summary = "Get user's timesheet history")
     @GetMapping("/history")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(@CurrentUser UserDTO user) {
             // @PathVariable Long userId , @CurrentUser UserDTO user) {
@@ -56,6 +60,8 @@ public class TimeSheetController {
         return ResponseEntity.ok(history);
     }
 
+
+    @Operation(summary = "Update a timesheet")
     @PutMapping("update/{timesheetId}")
     public ResponseEntity<String> partialUpdateTimesheet(
         @PathVariable Long timesheetId,
@@ -72,11 +78,14 @@ public class TimeSheetController {
     }
 
     
+    @Operation(summary = "Get timesheet by id")
     @GetMapping("/{id}")
     public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id) {
         return timeSheetService.getTimeSheetById(id);
     }
 
+
+    @Operation(summary = "Add entries to a timesheet")
     @PutMapping("/add-entry/{timesheetId}")
     public ResponseEntity<String> addEntriesToTimeSheet(
             @PathVariable Long timesheetId,

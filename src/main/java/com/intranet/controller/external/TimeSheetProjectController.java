@@ -10,12 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.intranet.dto.UserDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
-import com.intranet.repository.TimeSheetEntryRepo;
-import com.intranet.repository.TimeSheetRepo;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
-import com.intranet.service.external.ExternalProjectApiService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
@@ -24,15 +20,6 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/timesheet/project-info")
 @RequiredArgsConstructor
 public class TimeSheetProjectController {
-
-    @Autowired
-    private final TimeSheetEntryRepo timeSheetEntryRepository;
-
-    @Autowired
-    private final TimeSheetRepo timeSheetRepository;
-
-    @Autowired
-    private final ExternalProjectApiService externalProjectApiService;
 
     @Autowired
     private final TimeSheetService timesheetService;
