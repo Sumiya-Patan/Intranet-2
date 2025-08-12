@@ -1,14 +1,10 @@
 package com.intranet.controller;
 
-import java.util.Arrays;
-import java.util.List;
-
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.intranet.dto.UserDTO;
-import com.intranet.dto.UserSDTO;
 import com.intranet.security.CurrentUser;
 
 import io.swagger.v3.oas.annotations.Operation;

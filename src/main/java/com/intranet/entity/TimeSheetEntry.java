@@ -57,15 +57,6 @@ public class TimeSheetEntry {
     @Column(length = 255)
     private String otherDescription;
 
-    public Long getUserId() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getUserId'");
-    }
-
-    public TimeSheetEntry[] getEntries() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getEntries'");
-    }
    
 
 }

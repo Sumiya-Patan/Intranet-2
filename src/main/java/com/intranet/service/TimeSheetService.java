@@ -238,7 +238,6 @@ public class TimeSheetService {
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
 
-    @SuppressWarnings("unchecked")
     public List<ProjectTaskView> getUserTaskView(Long userId) {
     // Call PMS API dynamically using configured base URL
     String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
@@ -284,7 +283,7 @@ public class TimeSheetService {
     return new ArrayList<>(projectMap.values());
 }
 
-    @SuppressWarnings("unchecked")
+    
     public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
 
         String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
