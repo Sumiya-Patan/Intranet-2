@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.UserDTO;
 import com.intranet.dto.UserSDTO;
 import com.intranet.dto.external.ManagerInfoDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
@@ -24,6 +25,7 @@ import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 import com.intranet.service.external.ExternalProjectApiService;
 
@@ -47,26 +49,26 @@ public class TimeSheetProjectController {
     @Autowired
     private final TimeSheetService timesheetService;
 
-    @GetMapping("/projects")
-    public ResponseEntity<List<ProjectManagerInfoDTO>> getProjectAndManagerInfoFromTimesheets() {
+    // @GetMapping("/projects")
+    // public ResponseEntity<List<ProjectManagerInfoDTO>> getProjectAndManagerInfoFromTimesheets() {
 
-        // 1. Get all project IDs used in timesheet entries
-        Set<Long> projectIds = timeSheetEntryRepository.findAll()
-            .stream()
-            .map(TimeSheetEntry::getProjectId)
-            .collect(Collectors.toSet());
+    //     // 1. Get all project IDs used in timesheet entries
+    //     Set<Long> projectIds = timeSheetEntryRepository.findAll()
+    //         .stream()
+    //         .map(TimeSheetEntry::getProjectId)
+    //         .collect(Collectors.toSet());
 
-        // 2. For each projectId, call external API (mocked) to get project & manager info
-        List<ProjectManagerInfoDTO> result = projectIds.stream()
-            .map(pid -> {
-                String name = externalProjectApiService.getProjectName(pid);
-                List<ManagerInfoDTO> managers = externalProjectApiService.getManagersForProject(pid);
-                return new ProjectManagerInfoDTO(pid, name, managers);
-            })
-            .toList();
+    //     // 2. For each projectId, call external API (mocked) to get project & manager info
+    //     List<ProjectManagerInfoDTO> result = projectIds.stream()
+    //         .map(pid -> {
+    //             String name = externalProjectApiService.getProjectName(pid);
+    //             List<ManagerInfoDTO> managers = externalProjectApiService.getManagersForProject(pid);
+    //             return new ProjectManagerInfoDTO(pid, name, managers);
+    //         })
+    //         .toList();
 
-        return ResponseEntity.ok(result);
-    }
+    //     return ResponseEntity.ok(result);
+    // }
     
 
 
@@ -120,9 +122,9 @@ public class TimeSheetProjectController {
         return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/{userId}")
-    public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@PathVariable Long userId) {
-        List<ProjectTaskView> response = timesheetService.getUserTaskView(userId);
+    @GetMapping
+    public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user) {
+        List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
         return ResponseEntity.ok(response);
     }
 }

@@ -5,11 +5,16 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
 import com.intranet.dto.TimeSheetEntryDTO;
@@ -147,117 +152,7 @@ public class TimeSheetService {
     timesheet.setUpdatedAt(LocalDateTime.now());
     timeSheetRepository.save(timesheet);
 }
-
-public List<ProjectTaskView> getUserTaskView(Long userId) {
-        List<Map<String, Object>> ownedProjects = getMockOwnedProjects();
-        List<Map<String, Object>> memberProjects = getMockMemberProjects();
-        List<Map<String, Object>> tasks = getMockAssignedTasks();
-
-        // Map projectId → project name
-        Map<Long, String> projectIdToName = new HashMap<>();
-        ownedProjects.forEach(proj -> projectIdToName.put(
-            ((Number) proj.get("id")).longValue(),
-            (String) proj.get("name"))
-        );
-        memberProjects.forEach(proj -> projectIdToName.put(
-            ((Number) proj.get("id")).longValue(),
-            (String) proj.get("name"))
-        );
-
-        // Group tasks by projectId
-        Map<Long, List<TaskDTO>> projectIdToTasks = new HashMap<>();
-
-        for (Map<String, Object> task : tasks) {
-            Long taskId = ((Number) task.get("id")).longValue();
-            String title = (String) task.get("title");
-            String description = (String) task.get("description");
-
-            Long projectId = ((Number) task.get("projectId")).longValue();
-            String startTime = "";
-            String endTime = "";
-
-            Map<String, Object> sprint = (Map<String, Object>) task.get("sprint");
-            if (sprint != null) {
-                startTime = sprint.get("startDate").toString();
-                endTime = sprint.get("endDate").toString();
-            }
-
-            TaskDTO dto = new TaskDTO(taskId, title, description, startTime, endTime);
-            projectIdToTasks.computeIfAbsent(projectId, k -> new ArrayList<>()).add(dto);
-        }
-
-        // Final response construction
-        List<ProjectTaskView> response = new ArrayList<>();
-        for (Map.Entry<Long, List<TaskDTO>> entry : projectIdToTasks.entrySet()) {
-            Long projectId = entry.getKey();
-            String projectName = projectIdToName.getOrDefault(projectId, "Unknown Project");
-            List<TaskDTO> taskList = entry.getValue();
-
-            response.add(new ProjectTaskView(projectId, projectName, taskList));
-        }
-
-        return response;
-    }
-
-    // ------- MOCK DATA METHODS -------
-
-    private List<Map<String, Object>> getMockOwnedProjects() {
-        return Arrays.asList(
-            mockProject(101L, "Tomo AI Platform"),
-            mockProject(102L, "Internal Portal Revamp")
-        );
-    }
-
-    private List<Map<String, Object>> getMockMemberProjects() {
-        return Arrays.asList(
-            mockProject(103L, "Website Redesign"),
-            mockProject(104L, "Client Integration Layer")
-        );
-    }
-
-    private List<Map<String, Object>> getMockAssignedTasks() {
-    return Arrays.asList(
-        // Project 101 - Tomo AI Platform
-        mockTask(201L, "Define API schema", "Design all endpoint contracts", 101L, "2025-08-01", "2025-08-03"),
-        mockTask(202L, "Setup DB models", "JPA entities and relationships", 101L, "2025-08-03", "2025-08-05"),
-        mockTask(203L, "Auth flow", "JWT-based login/signup", 101L, "2025-08-06", "2025-08-08"),
-
-        // Project 102 - Internal Portal Revamp
-        mockTask(204L, "Design login screen", "React UI for login", 102L, "2025-08-02", "2025-08-05"),
-        mockTask(205L, "Theme system", "Add Tailwind-based theming", 102L, "2025-08-06", "2025-08-07"),
-
-        // Project 103 - Website Redesign
-        mockTask(206L, "Frontend setup", "Initial project structure in Vite", 103L, "2025-08-04", "2025-08-06"),
-
-        // Project 104 - Client Integration Layer
-        mockTask(207L, "Webhook handler", "Handle incoming webhooks", 104L, "2025-08-03", "2025-08-08"),
-        mockTask(208L, "API throttling", "Rate limit sensitive endpoints", 104L, "2025-08-09", "2025-08-11")
-    );
-}
-
-
-    private Map<String, Object> mockProject(Long id, String name) {
-        Map<String, Object> project = new HashMap<>();
-        project.put("id", id);
-        project.put("name", name);
-        return project;
-    }
-
-    private Map<String, Object> mockTask(Long id, String title, String description, Long projectId, String startDate, String endDate) {
-        Map<String, Object> task = new HashMap<>();
-        task.put("id", id);
-        task.put("title", title);
-        task.put("description", description);
-        task.put("projectId", projectId);
-
-        Map<String, Object> sprint = new HashMap<>();
-        sprint.put("startDate", startDate);
-        sprint.put("endDate", endDate);
-        task.put("sprint", sprint);
-
-        return task;
-    }
-
+        
     public TimeSheetResponseDTO getTimeSheetById(Long id) {
         TimeSheet timeSheet = timeSheetRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Timesheet not found with id: " + id));
@@ -333,4 +228,54 @@ public List<ProjectTaskView> getUserTaskView(Long userId) {
         timeSheetRepository.save(timeSheet);
         return true;
     }
+
+
+    private final RestTemplate restTemplate = new RestTemplate();
+    @Value("${pms.api.base-url}")
+    private String pmsBaseUrl;
+    public List<ProjectTaskView> getUserTaskView(Long userId) {
+    // Call PMS API dynamically using configured base URL
+    String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
+
+    ResponseEntity<List<Map<String, Object>>> response =
+            restTemplate.exchange(url, HttpMethod.GET, null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+
+    List<Map<String, Object>> taskData = response.getBody();
+    if (taskData == null || taskData.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Group tasks by projectId
+    Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
+
+    for (Map<String, Object> task : taskData) {
+        Long taskId = ((Number) task.get("id")).longValue();
+        String taskName = (String) task.get("title");
+        String description = (String) task.get("description");
+
+        // Extract project info from nested "project" object
+        Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
+        Long projectId = projectObj != null && projectObj.get("id") != null
+                ? ((Number) projectObj.get("id")).longValue()
+                : null;
+        String projectName = projectObj != null ? (String) projectObj.get("name") : null;
+
+        String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
+        String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+
+        TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
+
+        // Add to project grouping
+        if (projectId != null) {
+            projectMap
+                .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
+                .getTasks()
+                .add(taskDTO);
+        }
+    }
+
+    return new ArrayList<>(projectMap.values());
+}
+
 }
