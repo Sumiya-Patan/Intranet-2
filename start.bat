@@ -10,5 +10,5 @@ for /f "usebackq tokens=* delims=" %%a in (".env") do (
 )
 
 REM Start Spring Boot using system Maven
-mvn spring-boot:run
+mvnw spring-boot:run
 pause

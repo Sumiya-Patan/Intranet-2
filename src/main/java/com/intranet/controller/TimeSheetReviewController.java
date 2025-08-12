@@ -39,9 +39,6 @@ public class TimeSheetReviewController {
     @Autowired
     private final TimeSheetReviewRepo reviewRepository;
 
-    @Autowired
-    private final ExternalProjectApiService externalProjectApiService;
-
     @PutMapping("/review/{managerId}")
     public ResponseEntity<String> reviewTimesheet(
             @PathVariable Long managerId,
@@ -50,24 +47,7 @@ public class TimeSheetReviewController {
     ) {
         TimeSheet timeSheet = timeSheetRepository.findById(request.getTimesheetId())
                 .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
-
-        // Get unique projectIds from the timesheet
-        Set<Long> projectIds = timeSheet.getEntries()
-                                        .stream()
-                                        .map(TimeSheetEntry::getProjectId)
-                                        .collect(Collectors.toSet());
-
-        // Check if manager is assigned to at least one project
-        boolean managerIsAssigned = projectIds.stream().anyMatch(projectId -> {
-            List<ManagerInfoDTO> managers = externalProjectApiService.getManagersForProject(projectId);
-            return managers.stream().anyMatch(m -> m.getManagerId().equals(managerId));
-        });
-
-        if (!managerIsAssigned) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                                 .body("Manager is not assigned to this timesheet's projects.");
-        }
-
+        
         // Update the status
         if (!status.equalsIgnoreCase("Approved") && !status.equalsIgnoreCase("Rejected")) {
             return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED");
@@ -89,7 +69,7 @@ public class TimeSheetReviewController {
         
         review.setTimeSheet(timeSheet);
         review.setManagerId(managerId);
-        review.setAction(status.toUpperCase());
+        review.setAction(status);
         review.setComment(request.getComment());
         review.setReviewedAt(LocalDateTime.now());
 
