@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,7 +35,8 @@ public class TimeSheetController {
     @Autowired
     private TimeSheetService timeSheetService;
     
-    @Operation(summary = "Create a new timesheet")
+   @Operation(summary = "Create a new timesheet")
+   @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
    @PostMapping("/create")
     public ResponseEntity<String> submitTimeSheet(
             @RequestParam(value = "workDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
@@ -53,6 +55,7 @@ public class TimeSheetController {
     }
 
     @Operation(summary = "Get user's timesheet history")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @GetMapping("/history")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(@CurrentUser UserDTO user) {
             // @PathVariable Long userId , @CurrentUser UserDTO user) {
@@ -62,6 +65,7 @@ public class TimeSheetController {
 
 
     @Operation(summary = "Update a timesheet")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
     @PutMapping("update/{timesheetId}")
     public ResponseEntity<String> partialUpdateTimesheet(
         @PathVariable Long timesheetId,
@@ -78,7 +82,9 @@ public class TimeSheetController {
     }
 
     
+    
     @Operation(summary = "Get timesheet by id")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @GetMapping("/{id}")
     public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id) {
         return timeSheetService.getTimeSheetById(id);
@@ -86,6 +92,7 @@ public class TimeSheetController {
 
 
     @Operation(summary = "Add entries to a timesheet")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @PutMapping("/add-entry/{timesheetId}")
     public ResponseEntity<String> addEntriesToTimeSheet(
             @PathVariable Long timesheetId,

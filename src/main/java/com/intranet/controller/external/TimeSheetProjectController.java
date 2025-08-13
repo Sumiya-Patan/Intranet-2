@@ -3,6 +3,7 @@ package com.intranet.controller.external;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +26,7 @@ public class TimeSheetProjectController {
     private final TimeSheetService timesheetService;
 
     @Operation(summary = "Get Project and Task of a  current user")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @GetMapping
     public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user) {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
@@ -33,6 +35,7 @@ public class TimeSheetProjectController {
 
 
     @Operation(summary = "Manager and Project info of a current user")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @GetMapping("/managers")
     public ResponseEntity<List<ManagerUserMappingDTO>> getUsersAssignedToManagers(
             @CurrentUser UserDTO user) {

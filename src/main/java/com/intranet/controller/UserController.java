@@ -1,5 +1,6 @@
 package com.intranet.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 public class UserController {
 
     @Operation(summary = "Get Current user info")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
     @GetMapping("/me")
     public UserDTO getUserInfo(@CurrentUser UserDTO user) {
         return user;

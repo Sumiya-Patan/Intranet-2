@@ -11,6 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,8 +44,10 @@ public class ManagerTimeSheetController {
     private String pmsBaseUrl;
     
 
+
     @Operation(summary = "Get timesheets of a manager")
     @GetMapping("/manager")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimesheetsByManagerAndStatus(
         @CurrentUser UserDTO user,
         @RequestParam(required = false) String status
@@ -100,4 +105,13 @@ public class ManagerTimeSheetController {
 
     return ResponseEntity.ok(result);
 }
+
+
+@GetMapping("/debug/roles")
+public List<String> debugRoles(Authentication auth) {
+    return auth.getAuthorities().stream()
+        .map(GrantedAuthority::getAuthority)
+        .toList();
+}
+
 }
