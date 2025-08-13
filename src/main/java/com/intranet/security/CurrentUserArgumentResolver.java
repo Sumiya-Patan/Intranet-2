@@ -1,5 +1,7 @@
 package com.intranet.security;
 
+import java.util.Collections;
+
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -24,26 +26,26 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
                                   NativeWebRequest webRequest, org.springframework.web.bind.support.WebDataBinderFactory binderFactory) {
 
-        Authentication auth = (Authentication) webRequest.getUserPrincipal();
-        if (auth == null || !(auth.getPrincipal() instanceof Jwt)) {
-            return null;
-        }
+        // Authentication auth = (Authentication) webRequest.getUserPrincipal();
+        // if (auth == null || !(auth.getPrincipal() instanceof Jwt)) {
+        //     return null;
+        // }
 
-        Jwt jwt = (Jwt) auth.getPrincipal();
-        return new UserDTO(
-            Long.valueOf(jwt.getClaimAsString("user_id")), // Assuming user_id is an Integer
-            jwt.getClaim("email"),
-            jwt.getClaimAsString("name"),
-            jwt.getClaimAsStringList("roles")
-        );
+        // Jwt jwt = (Jwt) auth.getPrincipal();
+        // return new UserDTO(
+        //     Long.valueOf(jwt.getClaimAsString("user_id")), // Assuming user_id is an Integer
+        //     jwt.getClaim("email"),
+        //     jwt.getClaimAsString("name"),
+        //     jwt.getClaimAsStringList("roles")
+        // );
 
         // create a sample DTO for now
         
-        // UserDTO dto=new UserDTO();
-        // dto.setId(2L);
-        // dto.setName("Ajay Kumar");
-        // dto.setEmail("test@gmail.com");
-        // dto.setRoles(Collections.emptyList());
-        // return dto;
+        UserDTO dto=new UserDTO();
+        dto.setId(2L);
+        dto.setName("Ajay Kumar");
+        dto.setEmail("test@gmail.com");
+        dto.setRoles(Collections.emptyList());
+        return dto;
     }
 }
