@@ -26,6 +26,7 @@ import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
@@ -36,12 +37,13 @@ public class TimeSheetController {
     private TimeSheetService timeSheetService;
     
    @Operation(summary = "Create a new timesheet")
-   @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+//    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
    @PostMapping("/create")
     public ResponseEntity<String> submitTimeSheet(
             @RequestParam(value = "workDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
             @RequestBody List<TimeSheetEntryDTO> entries,
-            @CurrentUser UserDTO user) {
+            @CurrentUser UserDTO user, HttpServletRequest request) {
         // If no workDate is passed, use today's date
         if (workDate == null) {
             workDate = LocalDate.now();
@@ -55,9 +57,10 @@ public class TimeSheetController {
     }
 
     @Operation(summary = "Get user's timesheet history")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @GetMapping("/history")
-    public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(@CurrentUser UserDTO user) {
+    public ResponseEntity<List<TimeSheetResponseDTO>> getTimeSheetHistory(@CurrentUser UserDTO user, HttpServletRequest request) {
             // @PathVariable Long userId , @CurrentUser UserDTO user) {
         List<TimeSheetResponseDTO> history = timeSheetService.getUserTimeSheetHistory(user.getId());
         return ResponseEntity.ok(history);
@@ -65,11 +68,12 @@ public class TimeSheetController {
 
 
     @Operation(summary = "Update a timesheet")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PutMapping("update/{timesheetId}")
     public ResponseEntity<String> partialUpdateTimesheet(
         @PathVariable Long timesheetId,
-        @RequestBody TimeSheetUpdateRequestDTO updateRequest) {
+        @RequestBody TimeSheetUpdateRequestDTO updateRequest, HttpServletRequest request) {
 
     try {
         timeSheetService.partialUpdateTimesheet(timesheetId, updateRequest);
@@ -84,19 +88,21 @@ public class TimeSheetController {
     
     
     @Operation(summary = "Get timesheet by id")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @GetMapping("/{id}")
-    public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id) {
+    public TimeSheetResponseDTO getTimeSheetById(@PathVariable Long id, HttpServletRequest request) {
         return timeSheetService.getTimeSheetById(id);
     }
 
 
     @Operation(summary = "Add entries to a timesheet")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PutMapping("/add-entry/{timesheetId}")
     public ResponseEntity<String> addEntriesToTimeSheet(
             @PathVariable Long timesheetId,
-            @RequestBody List<TimeSheetEntryCreateRequestDTO> newEntries) {
+            @RequestBody List<TimeSheetEntryCreateRequestDTO> newEntries, HttpServletRequest request) {
 
         boolean success = timeSheetService.addEntriesToTimeSheet(timesheetId, newEntries);
         if (success) {

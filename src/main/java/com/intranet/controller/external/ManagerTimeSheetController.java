@@ -28,6 +28,7 @@ import com.intranet.entity.TimeSheet;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -47,10 +48,11 @@ public class ManagerTimeSheetController {
 
     @Operation(summary = "Get timesheets of a manager")
     @GetMapping("/manager")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimesheetsByManagerAndStatus(
         @CurrentUser UserDTO user,
-        @RequestParam(required = false) String status
+        @RequestParam(required = false) String status, HttpServletRequest request
     ) {
 
     // Step 1: Get projects owned by this manager from external API

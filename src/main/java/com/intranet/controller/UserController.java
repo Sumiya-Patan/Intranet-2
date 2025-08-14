@@ -9,15 +9,16 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 public class UserController {
 
     @Operation(summary = "Get Current user info")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @GetMapping("/me")
-    public UserDTO getUserInfo(@CurrentUser UserDTO user) {
+    public UserDTO getUserInfo(@CurrentUser UserDTO user, HttpServletRequest request) {
         return user;
     }
     

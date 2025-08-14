@@ -20,6 +20,7 @@ import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.security.CurrentUser;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -36,14 +37,16 @@ public class TimeSheetReviewController {
 
 
     @Operation(summary = "Review a timesheet by manager")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PutMapping("/review")
     public ResponseEntity<String> reviewTimesheet(
             @CurrentUser UserDTO user,
             @RequestParam String status,
-            @RequestBody TimeSheetReviewRequest request
+            @RequestBody TimeSheetReviewRequest request1,
+            HttpServletRequest request
     ) {
-        TimeSheet timeSheet = timeSheetRepository.findById(request.getTimesheetId())
+        TimeSheet timeSheet = timeSheetRepository.findById(request1.getTimesheetId())
                 .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
         
         // Update the status
@@ -52,7 +55,7 @@ public class TimeSheetReviewController {
         }
 
         // get comment from request if status is REJECTED
-        if (status.equalsIgnoreCase("REJECTED") && request.getComment() == null) {
+        if (status.equalsIgnoreCase("REJECTED") && request1.getComment() == null) {
             return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
         }
 
@@ -68,7 +71,7 @@ public class TimeSheetReviewController {
         review.setTimeSheet(timeSheet);
         review.setManagerId(user.getId());
         review.setAction(status);
-        review.setComment(request.getComment());
+        review.setComment(request1.getComment());
         review.setReviewedAt(LocalDateTime.now());
 
         reviewRepository.save(review);

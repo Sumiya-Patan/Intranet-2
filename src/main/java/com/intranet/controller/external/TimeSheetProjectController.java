@@ -14,6 +14,7 @@ import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -26,19 +27,21 @@ public class TimeSheetProjectController {
     private final TimeSheetService timesheetService;
 
     @Operation(summary = "Get Project and Task of a  current user")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @GetMapping
-    public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user) {
+    public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user, HttpServletRequest request) {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
         return ResponseEntity.ok(response);
     }
 
 
     @Operation(summary = "Manager and Project info of a current user")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @GetMapping("/managers")
     public ResponseEntity<List<ManagerUserMappingDTO>> getUsersAssignedToManagers(
-            @CurrentUser UserDTO user) {
+            @CurrentUser UserDTO user, HttpServletRequest request) {
         List<ManagerUserMappingDTO> result = timesheetService.getUsersAssignedToManagers(user.getId());
         return ResponseEntity.ok(result);
     }
