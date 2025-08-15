@@ -16,7 +16,7 @@ public class LocalJwtDecoderConfig {
     public JwtDecoder jwtDecoder() {
         return token -> {
             Map<String, Object> claims = new HashMap<>();
-            claims.put("user_id", "123");
+            claims.put("user_id", "2");
             claims.put("name", "Swagger Test User");
             claims.put("email", "swagger@example.com");
             claims.put("roles", List.of("General User", "Admin")); // matches your jwtAuthenticationConverter

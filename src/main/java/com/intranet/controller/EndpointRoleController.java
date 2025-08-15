@@ -25,6 +25,7 @@ import com.intranet.dto.RoleUpdateRequest;
 import com.intranet.entity.EndpointRole;
 import com.intranet.repository.EndpointRoleRepository;
 
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -37,6 +38,7 @@ public class EndpointRoleController {
 
     private final EndpointRoleRepository endpointRoleRepository;
 
+    @Operation(summary = "Assign a role to an endpoint")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @PostMapping
     public ResponseEntity<String> assignRole(@RequestBody EndpointRoleRequest request) {
@@ -64,12 +66,17 @@ public class EndpointRoleController {
         return ResponseEntity.ok("Role assigned to endpoint successfully");
     }
 
+
+        
+    @Operation(summary = "Get all roles assigned to endpoints")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @GetMapping("/all")
     public ResponseEntity<List<EndpointRole>> getAllRoles() {
         return ResponseEntity.ok(endpointRoleRepository.findAll());
     }
 
+
+    @Operation(summary = "Delete a role mapping from an endpoint by ID")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     // @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/delete/{id}")
@@ -90,7 +97,7 @@ public class EndpointRoleController {
 
     private final RequestMappingHandlerMapping handlerMapping;
     // private final EndpointRoleRepository endpointRoleRepository;
-
+    @Operation(summary = "Get all endpoints with their roles of the application")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @GetMapping("/endpoints-of-app")
     public List<EndpointInfo> getAllEndpoints() {
@@ -143,6 +150,7 @@ public static class EndpointInfo {
     }
 
 
+    @Operation(summary = "Update role name for all endpoints")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     @PutMapping("/update-role")
     public ResponseEntity<String> updateRoleName(@RequestBody RoleUpdateRequest request) {
