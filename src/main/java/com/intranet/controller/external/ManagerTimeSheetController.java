@@ -109,6 +109,7 @@ public class ManagerTimeSheetController {
 }
 
 
+@Operation(summary = "Debug roles of the authenticated user")
 @GetMapping("/debug/roles")
 public List<String> debugRoles(Authentication auth) {
     return auth.getAuthorities().stream()
