@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.BulkTimeSheetReviewRequest;
 import com.intranet.dto.UserDTO;
 import com.intranet.dto.external.TimeSheetReviewRequest;
 import com.intranet.entity.TimeSheet;
@@ -78,4 +79,50 @@ public class TimeSheetReviewController {
 
         return ResponseEntity.ok("Timesheet status updated and review saved successfully.");
     }
+
+    @Operation(summary = "Bulk review timesheets by manager")
+    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PutMapping("/review/bulk")
+    public ResponseEntity<String> bulkReviewTimesheets(
+            @CurrentUser UserDTO user,
+            @RequestBody BulkTimeSheetReviewRequest bulkRequest,
+            HttpServletRequest request
+    ) {
+        String status = bulkRequest.getStatus();
+
+        if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
+            return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED.");
+        }
+
+        if ("Rejected".equalsIgnoreCase(status) && (bulkRequest.getComment() == null || bulkRequest.getComment().isBlank())) {
+            return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
+        }
+
+        // Fetch all timesheets by IDs
+        var timeSheets = timeSheetRepository.findAllById(bulkRequest.getTimesheetIds());
+
+        if (timeSheets.isEmpty()) {
+            return ResponseEntity.badRequest().body("No valid timesheets found for given IDs.");
+        }
+
+        for (TimeSheet ts : timeSheets) {
+            ts.setStatus(status);
+            ts.setUpdatedAt(LocalDateTime.now());
+            timeSheetRepository.save(ts);
+
+            // Create review entry
+            TimeSheetReview review = new TimeSheetReview();
+            review.setTimeSheet(ts);
+            review.setManagerId(user.getId());
+            review.setAction(status);
+            review.setComment(bulkRequest.getComment());
+            review.setReviewedAt(LocalDateTime.now());
+
+            reviewRepository.save(review);
+        }
+
+        return ResponseEntity.ok("Bulk timesheet review completed successfully.");
+        }
+
+
 }
