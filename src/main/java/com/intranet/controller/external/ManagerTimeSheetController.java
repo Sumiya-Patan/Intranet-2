@@ -1,6 +1,7 @@
 package com.intranet.controller.external;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -9,6 +10,7 @@ import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,6 +32,7 @@ import com.intranet.security.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
@@ -41,9 +44,12 @@ public class ManagerTimeSheetController {
     
     
     private final RestTemplate restTemplate = new RestTemplate();
+    
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
     
+    @Value("${ums.api.base-url}")
+    private String umsBaseUrl;
 
 
     @Operation(summary = "Get timesheets of a manager")
@@ -79,6 +85,40 @@ public class ManagerTimeSheetController {
     if (status != null && !status.isBlank()) {
         filteredStream = filteredStream.filter(ts -> status.equalsIgnoreCase(ts.getStatus()));
     }
+// ✅ Step 4.5: Build user cache (unique userIds)
+    Set<Long> userIds = allTimeSheets.stream()
+        .map(TimeSheet::getUserId)
+        .collect(Collectors.toSet());
+
+
+    // Step: Get the current auth token from the request
+    String authHeader = request.getHeader("Authorization");
+
+// Prepare headers for RestTemplate call
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null) {
+        headers.set("Authorization", authHeader);
+    }
+
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
+    Map<Long, String> userCache = new HashMap<>();
+    for (Long userId : userIds) {
+     String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
+
+    try {
+    ResponseEntity<Map<String, Object>> userResponse =
+            restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+    Map<String, Object> userMap = userResponse.getBody();
+    if (userMap != null) {
+        String firstName = (String) userMap.get("first_name");
+        String lastName  = (String) userMap.get("last_name");
+        userCache.put(userId, firstName + " " + lastName);
+    }
+    } catch (Exception e) {
+    userCache.put(userId, "User not from UMS"); // fallback if UMS fails
+    }
+
+    }
 
     // Step 5: Map to DTO
     List<TimeSheetResponseDTO> result = filteredStream.map(ts -> {
@@ -99,6 +139,7 @@ public class ManagerTimeSheetController {
         TimeSheetResponseDTO tsDto = new TimeSheetResponseDTO();
         tsDto.setTimesheetId(ts.getTimesheetId());
         tsDto.setUserId(ts.getUserId());
+         tsDto.setUserName(userCache.get(ts.getUserId()));
         tsDto.setWorkDate(ts.getWorkDate());
         tsDto.setStatus(ts.getStatus());
         tsDto.setEntries(entries);

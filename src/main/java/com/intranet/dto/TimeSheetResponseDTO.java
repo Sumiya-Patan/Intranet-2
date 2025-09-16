@@ -10,6 +10,7 @@ public class TimeSheetResponseDTO {
 
     private Long timesheetId;
     private Long userId;
+     private String userName;
     private LocalDate workDate;
     private String Status;
     private List<TimeSheetEntryResponseDTO> entries;
