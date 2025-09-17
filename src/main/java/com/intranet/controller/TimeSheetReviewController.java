@@ -87,7 +87,7 @@ public class TimeSheetReviewController {
             @CurrentUser UserDTO user,
             @RequestBody BulkTimeSheetReviewRequest bulkRequest,
             HttpServletRequest request
-    ) {
+        ) {
         String status = bulkRequest.getStatus();
 
         if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
@@ -105,24 +105,43 @@ public class TimeSheetReviewController {
             return ResponseEntity.badRequest().body("No valid timesheets found for given IDs.");
         }
 
+        // 🔍 Check if all are still Pending
+    boolean hasNonPending = timeSheets.stream()
+            .anyMatch(ts -> !"Pending".equalsIgnoreCase(ts.getStatus()));
+
+    if (hasNonPending) {
+        return ResponseEntity.badRequest().body("Some timesheets are already updated.");
+    }
+
         for (TimeSheet ts : timeSheets) {
             ts.setStatus(status);
             ts.setUpdatedAt(LocalDateTime.now());
             timeSheetRepository.save(ts);
 
-            // Create review entry
-            TimeSheetReview review = new TimeSheetReview();
-            review.setTimeSheet(ts);
-            review.setManagerId(user.getId());
-            review.setAction(status);
-            review.setComment(bulkRequest.getComment());
-            review.setReviewedAt(LocalDateTime.now());
+            // Check if review already exists for this timesheet + manager
+            TimeSheetReview existingReview = reviewRepository
+                    .findByTimeSheetAndManagerId(ts, user.getId())
+                    .orElse(null);
 
-            reviewRepository.save(review);
+            if (existingReview != null) {
+                // Update existing review
+                existingReview.setAction(status);
+                existingReview.setComment(bulkRequest.getComment());
+                existingReview.setReviewedAt(LocalDateTime.now());
+                reviewRepository.save(existingReview);
+            } else {
+                // Create new review
+                TimeSheetReview review = new TimeSheetReview();
+                review.setTimeSheet(ts);
+                review.setManagerId(user.getId());
+                review.setAction(status);
+                review.setComment(bulkRequest.getComment());
+                review.setReviewedAt(LocalDateTime.now());
+                reviewRepository.save(review);
+            }
         }
 
         return ResponseEntity.ok("Bulk timesheet review completed successfully.");
         }
-
 
 }
