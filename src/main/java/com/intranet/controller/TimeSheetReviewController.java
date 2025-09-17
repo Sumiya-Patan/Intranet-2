@@ -42,43 +42,60 @@ public class TimeSheetReviewController {
     @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PutMapping("/review")
     public ResponseEntity<String> reviewTimesheet(
-            @CurrentUser UserDTO user,
-            @RequestParam String status,
-            @RequestBody TimeSheetReviewRequest request1,
-            HttpServletRequest request
+        @CurrentUser UserDTO user,
+        @RequestParam String status,
+        @RequestBody TimeSheetReviewRequest request1,
+        HttpServletRequest request
     ) {
-        TimeSheet timeSheet = timeSheetRepository.findById(request1.getTimesheetId())
-                .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
-        
-        // Update the status
-        if (!status.equalsIgnoreCase("Approved") && !status.equalsIgnoreCase("Rejected")) {
-            return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED");
-        }
+    TimeSheet timeSheet = timeSheetRepository.findById(request1.getTimesheetId())
+            .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
 
-        // get comment from request if status is REJECTED
-        if (status.equalsIgnoreCase("REJECTED") && request1.getComment() == null) {
-            return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
-        }
+    // Only allow review if Pending
+    if (!"Pending".equalsIgnoreCase(timeSheet.getStatus())) {
+        return ResponseEntity.badRequest().body("Timesheet is already reviewed.");
+    }
 
-        timeSheet.setStatus(status);
-        timeSheet.setUpdatedAt(LocalDateTime.now());
+    // Validate status
+    if (!status.equalsIgnoreCase("Approved") && !status.equalsIgnoreCase("Rejected")) {
+        return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED.");
+    }
 
-        // Save the updated timesheet
-        timeSheetRepository.save(timeSheet);
+    // Require comment if Rejected
+    if ("Rejected".equalsIgnoreCase(status) && 
+        (request1.getComment() == null || request1.getComment().isBlank())) {
+        return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
+    }
 
-        // Add a review entry
+    // Update timesheet
+    timeSheet.setStatus(status);
+    timeSheet.setUpdatedAt(LocalDateTime.now());
+    timeSheetRepository.save(timeSheet);
+
+    // Check if review already exists
+    TimeSheetReview existingReview = reviewRepository
+            .findByTimeSheetAndManagerId(timeSheet, user.getId())
+            .orElse(null);
+
+    if (existingReview != null) {
+        // Update existing review
+        existingReview.setAction(status);
+        existingReview.setComment(request1.getComment());
+        existingReview.setReviewedAt(LocalDateTime.now());
+        reviewRepository.save(existingReview);
+    } else {
+        // Create new review
         TimeSheetReview review = new TimeSheetReview();
-        
         review.setTimeSheet(timeSheet);
         review.setManagerId(user.getId());
         review.setAction(status);
         review.setComment(request1.getComment());
         review.setReviewedAt(LocalDateTime.now());
-
         reviewRepository.save(review);
-
-        return ResponseEntity.ok("Timesheet status updated and review saved successfully.");
     }
+
+    return ResponseEntity.ok("Timesheet status updated and review saved successfully.");
+    }
+
 
     @Operation(summary = "Bulk review timesheets by manager")
     @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
