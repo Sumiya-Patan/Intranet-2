@@ -304,6 +304,41 @@ public class TimeSheetService {
 
     return new ArrayList<>(projectMap.values());
 }
+    public List<ProjectTaskView> getUserTaskViewM() {
+    String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
+
+    ResponseEntity<List<Map<String, Object>>> response =
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    buildEntityWithAuth(),
+                    new ParameterizedTypeReference<>() {}
+            );
+
+    List<Map<String, Object>> projectData = response.getBody();
+    if (projectData == null || projectData.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    return projectData.stream().map(p -> {
+        Long projectId = ((Number) p.get("projectId")).longValue();
+        String projectName = (String) p.get("projectName");
+
+        List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
+        List<TaskDTO> tasks = taskList.stream()
+                .map(t -> new TaskDTO(
+                        ((Number) t.get("taskId")).longValue(),
+                        (String) t.get("taskName"),
+                        null, // description not available
+                        null, // startTime not available
+                        null  // endTime not available
+                ))
+                .toList();
+
+        return new ProjectTaskView(projectId, projectName, tasks);
+    }).toList();
+}
+
 
     
     public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {

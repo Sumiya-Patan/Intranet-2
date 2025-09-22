@@ -35,6 +35,14 @@ public class TimeSheetProjectController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Get Project and Task of a  current user")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @GetMapping("/all")
+    public ResponseEntity<List<ProjectTaskView>> getTimesheetViewM(@CurrentUser UserDTO user, HttpServletRequest request) {
+        List<ProjectTaskView> response = timesheetService.getUserTaskViewM();
+        return ResponseEntity.ok(response);
+    }
 
     @Operation(summary = "Manager and Project info of a current user")
     
