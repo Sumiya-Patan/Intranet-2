@@ -11,10 +11,14 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
 import com.intranet.dto.TimeSheetEntryDTO;
@@ -31,6 +35,7 @@ import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import java.util.Map;
 import java.util.Objects;
@@ -238,12 +243,29 @@ public class TimeSheetService {
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
 
+    private HttpEntity<Void> buildEntityWithAuth() {
+    ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    if (attrs == null) {
+        return (HttpEntity<Void>) HttpEntity.EMPTY;
+    }
+
+    HttpServletRequest request = attrs.getRequest();
+    String authHeader = request.getHeader("Authorization");
+
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader);
+    }
+
+    return new HttpEntity<>(headers);
+    }
+
     public List<ProjectTaskView> getUserTaskView(Long userId) {
     // Call PMS API dynamically using configured base URL
     String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
 
     ResponseEntity<List<Map<String, Object>>> response =
-            restTemplate.exchange(url, HttpMethod.GET, null,
+            restTemplate.exchange(url, HttpMethod.GET, buildEntityWithAuth(),
                     new ParameterizedTypeReference<List<Map<String, Object>>>() {});
 
     List<Map<String, Object>> taskData = response.getBody();
@@ -286,8 +308,17 @@ public class TimeSheetService {
     
     public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
 
-        String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
-        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+    String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
+     // ✅ Use helper method to build HttpEntity with Authorization
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // Use exchange instead of getForEntity to pass headers
+    ResponseEntity<List> response = restTemplate.exchange(
+            url,
+            HttpMethod.GET,
+            entity,
+            List.class
+    );
 
         if (response.getBody() == null) {
             return Collections.emptyList();
