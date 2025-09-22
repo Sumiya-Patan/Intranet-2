@@ -36,14 +36,24 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
         
 
         Jwt jwt = (Jwt) auth.getPrincipal();
+        // Normalize roles: trim, replace spaces with underscores, convert to uppercase
         List<String> normalizedRoles = jwt.getClaimAsStringList("roles").stream()
-            .map(role -> role.trim().replace(" ", "_").toUpperCase())
-            .collect(Collectors.toList());
-        return new UserDTO(
-            Long.valueOf(jwt.getClaimAsString("user_id")), // Assuming user_id is an Integer
-            jwt.getClaimAsString("name"),
-            jwt.getClaim("email"),            
-            normalizedRoles
+                .map(role -> role.trim().replace(" ", "_").toUpperCase())
+                .collect(Collectors.toList());
+
+        // Normalize permissions: trim and convert to uppercase
+        List<String> normalizedPermissions = jwt.getClaimAsStringList("permissions").stream()
+                .map(permission -> permission.trim().toUpperCase())
+                .collect(Collectors.toList());
+
+        // Build UserDTO
+        UserDTO userDTO = new UserDTO(
+                Long.valueOf(jwt.getClaimAsString("user_id")), // user_id as Long
+                jwt.getClaimAsString("name"),                 // name
+                jwt.getClaimAsString("email"),                // email as String
+                normalizedRoles,                              // roles
+                normalizedPermissions                          // permissions
         );
+        return userDTO;
     }
 }

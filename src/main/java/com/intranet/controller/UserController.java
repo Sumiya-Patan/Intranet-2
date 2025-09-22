@@ -16,7 +16,8 @@ import jakarta.servlet.http.HttpServletRequest;
 public class UserController {
 
     @Operation(summary = "Get Current user info")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping("/me")
     public UserDTO getUserInfo(@CurrentUser UserDTO user, HttpServletRequest request) {
         return user;

@@ -48,20 +48,16 @@ public class SecurityConfig {
   }
 
   private JwtAuthenticationConverter jwtAuthenticationConverter() {
-    JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
-    grantedAuthoritiesConverter.setAuthoritiesClaimName("roles");
-    grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_"); // needed for hasRole()
-
     JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+
     authenticationConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
-        return jwt.getClaimAsStringList("roles").stream()
-            .map(role -> role.trim().replace(" ", "_").toUpperCase()) // remove spaces
-            .map(role -> "ROLE_" + role) // add ROLE_ prefix
-            .map(SimpleGrantedAuthority::new)
-            .collect(Collectors.toList());
+        // Extract and normalize permissions
+        return jwt.getClaimAsStringList("permissions").stream()
+                .map(permission -> permission.trim().toUpperCase())  // normalize
+                .map(SimpleGrantedAuthority::new)                    // convert to GrantedAuthority
+                .collect(Collectors.toList());
     });
 
     return authenticationConverter;
   }
-  
 }

@@ -54,8 +54,8 @@ public class ManagerTimeSheetController {
 
     @Operation(summary = "Get timesheets of a manager")
     @GetMapping("/manager")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimesheetsByManagerAndStatus(
         @CurrentUser UserDTO user,
         @RequestParam(required = false) String status, HttpServletRequest request

@@ -27,8 +27,8 @@ public class TimeSheetProjectController {
     private final TimeSheetService timesheetService;
 
     @Operation(summary = "Get Project and Task of a  current user")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping
     public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user, HttpServletRequest request) {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
@@ -37,8 +37,9 @@ public class TimeSheetProjectController {
 
 
     @Operation(summary = "Manager and Project info of a current user")
-    // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping("/managers")
     public ResponseEntity<List<ManagerUserMappingDTO>> getUsersAssignedToManagers(
             @CurrentUser UserDTO user, HttpServletRequest request) {

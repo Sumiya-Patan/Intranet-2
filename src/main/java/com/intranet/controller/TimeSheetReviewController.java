@@ -39,7 +39,8 @@ public class TimeSheetReviewController {
 
     @Operation(summary = "Review a timesheet by manager")
     // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     @PutMapping("/review")
     public ResponseEntity<String> reviewTimesheet(
         @CurrentUser UserDTO user,
@@ -98,7 +99,8 @@ public class TimeSheetReviewController {
 
 
     @Operation(summary = "Bulk review timesheets by manager")
-    @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     @PutMapping("/review/bulk")
     public ResponseEntity<String> bulkReviewTimesheets(
             @CurrentUser UserDTO user,
