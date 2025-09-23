@@ -1,8 +1,5 @@
 package com.intranet.controller;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -164,17 +161,31 @@ public class TimeSheetReviewController {
     }
 
     // 7. Apply status rules
-    boolean anyRejected = actionStatus.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
-    boolean allApproved = !actionStatus.isEmpty() && actionStatus.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-    boolean anyApproved = actionStatus.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-    boolean allPending = !actionStatus.isEmpty() && actionStatus.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+    boolean anyRejected = actionStatus.stream()
+            .anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
+
+    boolean allApproved = !actionStatus.isEmpty() && actionStatus.stream()
+            .allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+
+    boolean allPending = !actionStatus.isEmpty() && actionStatus.stream()
+            .allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+
+    boolean partiallyApproved = !allApproved && !allPending && !anyRejected 
+            && actionStatus.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
 
     String overall;
-    if (anyRejected) overall = "Rejected";
-    else if (allApproved) overall = "Approved";
-    else if (anyApproved) overall = "Partially Approved";
-    else if (allPending) overall = "Pending";
-    else overall = "Pending";
+    if (anyRejected) {
+        overall = "Rejected";
+    } else if (allApproved) {
+        overall = "Approved";
+    } else if (partiallyApproved) {
+        overall = "Partially Approved";
+    } else if (allPending) {
+        overall = "Pending";
+    } else {
+        overall = "Pending"; // fallback
+    }
+
 
     // 8. Save updated timesheet
     timeSheet.setStatus(overall);
