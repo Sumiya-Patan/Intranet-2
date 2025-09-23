@@ -14,4 +14,5 @@ public class TimeSheetResponseDTO {
     private LocalDate workDate;
     private String Status;
     private List<TimeSheetEntryResponseDTO> entries;
+    private List<ActionStatusDTO> actionStatus;
 }
