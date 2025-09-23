@@ -170,16 +170,14 @@ public class TimeSheetReviewController {
     boolean allPending = !actionStatus.isEmpty() && actionStatus.stream()
             .allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
 
-    boolean partiallyApproved = !allApproved && !allPending && !anyRejected 
-            && actionStatus.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+    // boolean partiallyApproved = !allApproved && !allPending && !anyRejected 
+    //         && actionStatus.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
 
     String overall;
     if (anyRejected) {
         overall = "Rejected";
     } else if (allApproved) {
         overall = "Approved";
-    } else if (partiallyApproved) {
-        overall = "Partially Approved";
     } else if (allPending) {
         overall = "Pending";
     } else {
