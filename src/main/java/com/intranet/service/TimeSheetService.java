@@ -170,20 +170,22 @@ public class TimeSheetService {
         dto.setStatus("Pending");
         dto.setActionStatus(null);
     } else {
-    boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
-    boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-    boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+        boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
+        boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+        boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+        boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
 
-    if (anyRejected) {
-        dto.setStatus("Rejected");
-    } else if (anyApproved) {
-        dto.setStatus("Partially Approved");
-    } else if (allPending) {
-        dto.setStatus("Pending");
-    } else {
-        dto.setStatus("Pending"); // fallback, though this should not occur
+        if (anyRejected) {
+            dto.setStatus("Rejected");
+        } else if (allApproved) {
+            dto.setStatus("Approved");
+        } else if (anyApproved) {
+            dto.setStatus("Partially Approved");
+        } else if (allPending) {
+            dto.setStatus("Pending");
+        } else {
+            dto.setStatus("Pending"); // fallback
     }
-
     dto.setActionStatus(actionStatusList);
     }
         return dto;

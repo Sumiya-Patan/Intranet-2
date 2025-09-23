@@ -43,89 +43,103 @@ public class ManagerTimeSheetController {
     @GetMapping("/manager")
     @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<List<TimeSheetResponseDTO>> getTimesheetsByManagerAndStatus(
-            @CurrentUser UserDTO user,
-            @RequestParam(required = false) String status,
-            HttpServletRequest request) {
+        @CurrentUser UserDTO user,
+        @RequestParam(required = false) String status,
+        HttpServletRequest request) {
 
-        // Step 1: Prepare Authorization header from incoming request
-        String authHeader = request.getHeader("Authorization");
-        HttpHeaders headers = new HttpHeaders();
-        if (authHeader != null && !authHeader.isBlank()) {
-            headers.set("Authorization", authHeader); // forward the Bearer token
-        }
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-        // Step 2: Get projects owned by this manager from external API
-        String url = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
-        ResponseEntity<List<Map<String, Object>>> response =
-                restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-        List<Map<String, Object>> projects = response.getBody();
-        if (projects == null || projects.isEmpty()) {
-            return ResponseEntity.ok(Collections.emptyList());
-        }
-
-        // Step 3: Collect all memberIds from the projects
-        Set<Long> memberIds = projects.stream()
-                .flatMap(p -> ((List<Map<String, Object>>) p.get("members")).stream())
-                .map(m -> ((Number) m.get("id")).longValue())
-                .collect(Collectors.toSet());
-
-        // Step 4: Fetch all timesheets for these memberIds
-        List<TimeSheet> allTimeSheets = timeSheetRepository.findByUserIdIn(memberIds);
-
-        // Step 5: Optionally filter by status
-        Stream<TimeSheet> filteredStream = allTimeSheets.stream();
-        if (status != null && !status.isBlank()) {
-            filteredStream = filteredStream.filter(ts -> status.equalsIgnoreCase(ts.getStatus()));
-        }
-
-        // Step 6: Build user cache by calling UMS
-        Set<Long> userIds = allTimeSheets.stream().map(TimeSheet::getUserId).collect(Collectors.toSet());
-        Map<Long, String> userCache = new HashMap<>();
-        for (Long userId : userIds) {
-            String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
-            try {
-                ResponseEntity<Map<String, Object>> userResponse =
-                        restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-                Map<String, Object> userMap = userResponse.getBody();
-                if (userMap != null) {
-                    String firstName = (String) userMap.get("first_name");
-                    String lastName = (String) userMap.get("last_name");
-                    userCache.put(userId, firstName + " " + lastName);
-                }
-            } catch (Exception e) {
-                userCache.put(userId, "User not from UMS"); // fallback if UMS fails
-            }
-        }
-
-        // Step 7: Map to DTO
-        List<TimeSheetResponseDTO> result = filteredStream.map(ts -> {
-            List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
-                TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
-                dto.setTimesheetEntryId(entry.getTimesheetEntryId());
-                dto.setProjectId(entry.getProjectId());
-                dto.setTaskId(entry.getTaskId());
-                dto.setDescription(entry.getDescription());
-                dto.setWorkType(entry.getWorkType());
-                dto.setHoursWorked(entry.getHoursWorked());
-                dto.setFromTime(entry.getFromTime());
-                dto.setToTime(entry.getToTime());
-                dto.setOtherDescription(entry.getOtherDescription());
-                return dto;
-            }).toList();
-
-            TimeSheetResponseDTO tsDto = new TimeSheetResponseDTO();
-            tsDto.setTimesheetId(ts.getTimesheetId());
-            tsDto.setUserId(ts.getUserId());
-            tsDto.setUserName(userCache.get(ts.getUserId()));
-            tsDto.setWorkDate(ts.getWorkDate());
-            tsDto.setStatus(ts.getStatus());
-            tsDto.setEntries(entries);
-            return tsDto;
-        }).toList();
-
-        return ResponseEntity.ok(result);
+    // Step 1: Prepare Authorization header
+    String authHeader = request.getHeader("Authorization");
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader); // forward the Bearer token
     }
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+    // Step 2: Get projects owned by this manager from PMS API
+    String url = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
+    ResponseEntity<List<Map<String, Object>>> response =
+            restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+    List<Map<String, Object>> projects = response.getBody();
+
+    if (projects == null || projects.isEmpty()) {
+        return ResponseEntity.ok(Collections.emptyList());
+    }
+
+    // Step 3a: Collect all memberIds from the projects
+    Set<Long> memberIds = projects.stream()
+            .flatMap(p -> ((List<Map<String, Object>>) p.get("members")).stream())
+            .map(m -> ((Number) m.get("id")).longValue())
+            .collect(Collectors.toSet());
+
+    // Step 3b: Collect all project IDs owned by this manager
+    Set<Long> managerProjectIds = projects.stream()
+            .map(p -> ((Number) p.get("id")).longValue())
+            .collect(Collectors.toSet());
+
+    // Step 4: Fetch all timesheets for these memberIds
+    List<TimeSheet> allTimeSheets = timeSheetRepository.findByUserIdIn(memberIds);
+
+    // Step 5: Optionally filter timesheets by status
+    Stream<TimeSheet> filteredStream = allTimeSheets.stream();
+    if (status != null && !status.isBlank()) {
+        filteredStream = filteredStream.filter(ts -> status.equalsIgnoreCase(ts.getStatus()));
+    }
+
+    // Step 6: Build user cache by calling UMS
+    Set<Long> userIds = allTimeSheets.stream().map(TimeSheet::getUserId).collect(Collectors.toSet());
+    Map<Long, String> userCache = new HashMap<>();
+    for (Long userId : userIds) {
+        String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
+        try {
+            ResponseEntity<Map<String, Object>> userResponse =
+                    restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+            Map<String, Object> userMap = userResponse.getBody();
+            if (userMap != null) {
+                String firstName = (String) userMap.get("first_name");
+                String lastName = (String) userMap.get("last_name");
+                userCache.put(userId, (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : ""));
+            }
+        } catch (Exception e) {
+            userCache.put(userId, "User not from UMS"); // fallback
+        }
+    }
+
+    // Step 7: Map to DTO and filter entries based on manager's projects
+    List<TimeSheetResponseDTO> result = filteredStream.map(ts -> {
+        // Filter entries that belong to manager's projects
+        List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream()
+                .filter(entry -> managerProjectIds.contains(entry.getProjectId()))
+                .map(entry -> {
+                    TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
+                    dto.setTimesheetEntryId(entry.getTimesheetEntryId());
+                    dto.setProjectId(entry.getProjectId());
+                    dto.setTaskId(entry.getTaskId());
+                    dto.setDescription(entry.getDescription());
+                    dto.setWorkType(entry.getWorkType());
+                    dto.setHoursWorked(entry.getHoursWorked());
+                    dto.setFromTime(entry.getFromTime());
+                    dto.setToTime(entry.getToTime());
+                    dto.setOtherDescription(entry.getOtherDescription());
+                    return dto;
+                }).toList();
+
+        if (entries.isEmpty()) return null; // Skip timesheets with no entries in manager's projects
+
+        TimeSheetResponseDTO tsDto = new TimeSheetResponseDTO();
+        tsDto.setTimesheetId(ts.getTimesheetId());
+        tsDto.setUserId(ts.getUserId());
+        tsDto.setUserName(userCache.get(ts.getUserId()));
+        tsDto.setWorkDate(ts.getWorkDate());
+        tsDto.setStatus(ts.getStatus());
+        tsDto.setEntries(entries);
+        return tsDto;
+    })
+    .filter(Objects::nonNull) // Remove nulls
+    .toList();
+
+    return ResponseEntity.ok(result);
+    }
+
     @Operation(summary = "Debug permissions of the authenticated user")
     @GetMapping("/debug/permissions")
     public List<String> debugRoles(Authentication auth) {
