@@ -1,7 +1,9 @@
 package com.intranet.controller;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -66,6 +68,24 @@ public class TimeSheetController {
             return ResponseEntity.badRequest()
                     .body("Timesheet already submitted for " + workDate);
         }
+        
+        // Check for duplicates in the same request
+        Map<String, Integer> entryCountMap = new HashMap<>();
+        for (int i = 0; i < entries.size(); i++) {
+        TimeSheetEntryDTO entry = entries.get(i);
+
+        String key = entry.getProjectId() + "-" + entry.getTaskId() + "-" 
+                    + entry.getFromTime() + "-" + entry.getToTime();
+
+        entryCountMap.put(key, entryCountMap.getOrDefault(key, 0) + 1);
+        int count = entryCountMap.get(key);
+
+        if (count > 1) {
+            return ResponseEntity.badRequest()
+                    .body("Duplicate entry found");
+        }
+        }
+
 
         try {
             timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
