@@ -17,9 +17,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "TimeSheetEntry", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"timesheet_id", "task_id", "project_id"})
-})
+@Table(name = "TimeSheetEntry")
 @NoArgsConstructor
 @AllArgsConstructor
 @Data

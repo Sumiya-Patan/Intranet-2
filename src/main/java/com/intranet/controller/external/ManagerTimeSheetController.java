@@ -17,7 +17,9 @@ import com.intranet.dto.TimeSheetEntryResponseDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.UserDTO;
 import com.intranet.entity.TimeSheet;
+import com.intranet.entity.TimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.security.CurrentUser;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 public class ManagerTimeSheetController {
 
     private final TimeSheetRepo timeSheetRepository;
+    private final TimeSheetReviewRepo reviewRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${pms.api.base-url}")
@@ -106,36 +109,42 @@ public class ManagerTimeSheetController {
 
     // Step 7: Map to DTO and filter entries based on manager's projects
     List<TimeSheetResponseDTO> result = filteredStream.map(ts -> {
-        // Filter entries that belong to manager's projects
-        List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream()
-                .filter(entry -> managerProjectIds.contains(entry.getProjectId()))
-                .map(entry -> {
-                    TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
-                    dto.setTimesheetEntryId(entry.getTimesheetEntryId());
-                    dto.setProjectId(entry.getProjectId());
-                    dto.setTaskId(entry.getTaskId());
-                    dto.setDescription(entry.getDescription());
-                    dto.setWorkType(entry.getWorkType());
-                    dto.setHoursWorked(entry.getHoursWorked());
-                    dto.setFromTime(entry.getFromTime());
-                    dto.setToTime(entry.getToTime());
-                    dto.setOtherDescription(entry.getOtherDescription());
-                    return dto;
-                }).toList();
+    // Filter entries that belong to manager's projects
+    List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream()
+            .filter(entry -> managerProjectIds.contains(entry.getProjectId()))
+            .map(entry -> {
+                TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
+                dto.setTimesheetEntryId(entry.getTimesheetEntryId());
+                dto.setProjectId(entry.getProjectId());
+                dto.setTaskId(entry.getTaskId());
+                dto.setDescription(entry.getDescription());
+                dto.setWorkType(entry.getWorkType());
+                dto.setHoursWorked(entry.getHoursWorked());
+                dto.setFromTime(entry.getFromTime());
+                dto.setToTime(entry.getToTime());
+                dto.setOtherDescription(entry.getOtherDescription());
+                return dto;
+            }).toList();
 
-        if (entries.isEmpty()) return null; // Skip timesheets with no entries in manager's projects
+    if (entries.isEmpty()) return null; // Skip if no relevant entries
 
-        TimeSheetResponseDTO tsDto = new TimeSheetResponseDTO();
-        tsDto.setTimesheetId(ts.getTimesheetId());
-        tsDto.setUserId(ts.getUserId());
-        tsDto.setUserName(userCache.get(ts.getUserId()));
-        tsDto.setWorkDate(ts.getWorkDate());
-        tsDto.setStatus(ts.getStatus());
-        tsDto.setEntries(entries);
-        return tsDto;
+    TimeSheetResponseDTO tsDto = new TimeSheetResponseDTO();
+    tsDto.setTimesheetId(ts.getTimesheetId());
+    tsDto.setUserId(ts.getUserId());
+    tsDto.setUserName(userCache.get(ts.getUserId()));
+    tsDto.setWorkDate(ts.getWorkDate());
+
+    // ✅ Use manager's review status, not global timesheet status
+    Optional<TimeSheetReview> reviewOpt = reviewRepository.findByTimeSheetAndManagerId(ts, user.getId());
+    String managerStatus = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
+    tsDto.setStatus(managerStatus);
+
+    tsDto.setEntries(entries);
+    return tsDto;
     })
-    .filter(Objects::nonNull) // Remove nulls
+    .filter(Objects::nonNull)
     .toList();
+
 
     return ResponseEntity.ok(result);
     }

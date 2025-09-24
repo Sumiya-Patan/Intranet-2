@@ -202,68 +202,133 @@ public class TimeSheetReviewController {
     }
     
     @Operation(summary = "Bulk review timesheets by manager")
-    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     @PutMapping("/review/bulk")
+    @Transactional
     public ResponseEntity<String> bulkReviewTimesheets(
-            @CurrentUser UserDTO user,
-            @RequestBody BulkTimeSheetReviewRequest bulkRequest,
-            HttpServletRequest request
-        ) {
-        String status = bulkRequest.getStatus();
+        @CurrentUser UserDTO user,
+        @RequestBody BulkTimeSheetReviewRequest bulkRequest,
+        HttpServletRequest request) {
 
-        if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
-            return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED.");
-        }
+    String status = bulkRequest.getStatus();
 
-        if ("Rejected".equalsIgnoreCase(status) && (bulkRequest.getComment() == null || bulkRequest.getComment().isBlank())) {
-            return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
-        }
-
-        // Fetch all timesheets by IDs
-        var timeSheets = timeSheetRepository.findAllById(bulkRequest.getTimesheetIds());
-
-        if (timeSheets.isEmpty()) {
-            return ResponseEntity.badRequest().body("No valid timesheets found for given IDs.");
-        }
-
-        // 🔍 Check if all are still Pending
-    boolean hasNonPending = timeSheets.stream()
-            .anyMatch(ts -> !"Pending".equalsIgnoreCase(ts.getStatus()));
-
-    if (hasNonPending) {
-        return ResponseEntity.badRequest().body("Some timesheets are already updated.");
+    // 1. Validate input
+    if (!"Approved".equalsIgnoreCase(status) && !"Rejected".equalsIgnoreCase(status)) {
+        return ResponseEntity.badRequest().body("Invalid status. Must be APPROVED or REJECTED.");
+    }
+    if ("Rejected".equalsIgnoreCase(status) &&
+        (bulkRequest.getComment() == null || bulkRequest.getComment().isBlank())) {
+        return ResponseEntity.badRequest().body("Comment is required for rejected timesheets.");
     }
 
-        for (TimeSheet ts : timeSheets) {
-            ts.setStatus(status);
-            ts.setUpdatedAt(LocalDateTime.now());
-            timeSheetRepository.save(ts);
+    // 2. Fetch all timesheets by IDs
+    List<TimeSheet> timeSheets = timeSheetRepository.findAllById(bulkRequest.getTimesheetIds());
+    if (timeSheets.isEmpty()) {
+        return ResponseEntity.badRequest().body("No valid timesheets found for given IDs.");
+    }
 
-            // Check if review already exists for this timesheet + manager
-            TimeSheetReview existingReview = reviewRepository
-                    .findByTimeSheetAndManagerId(ts, user.getId())
-                    .orElse(null);
+    // 3. Setup headers for PMS API
+    String authHeader = request.getHeader("Authorization");
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader);
+    }
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-            if (existingReview != null) {
-                // Update existing review
-                existingReview.setAction(status);
-                existingReview.setComment(bulkRequest.getComment());
-                existingReview.setReviewedAt(LocalDateTime.now());
-                reviewRepository.save(existingReview);
-            } else {
-                // Create new review
-                TimeSheetReview review = new TimeSheetReview();
-                review.setTimeSheet(ts);
-                review.setManagerId(user.getId());
-                review.setAction(status);
-                review.setComment(bulkRequest.getComment());
-                review.setReviewedAt(LocalDateTime.now());
-                reviewRepository.save(review);
+    // 4. Fetch all projects (for mapping owners)
+    String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+    ResponseEntity<List<Map<String, Object>>> allProjectsResp =
+            restTemplate.exchange(projectsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+    List<Map<String, Object>> allProjects = allProjectsResp.getBody();
+
+    // 5. Process each timesheet
+    for (TimeSheet ts : timeSheets) {
+        Set<Long> timesheetProjectIds = ts.getEntries().stream()
+                .map(TimeSheetEntry::getProjectId)
+                .collect(Collectors.toSet());
+
+        // --- Validate this manager is owner of at least one project ---
+        String ownerProjectsUrl = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
+        ResponseEntity<List<Map<String, Object>>> ownerProjectsResp =
+                restTemplate.exchange(ownerProjectsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+        List<Map<String, Object>> ownerProjects = ownerProjectsResp.getBody();
+
+        Set<Long> managerProjectIds = (ownerProjects == null) ? Collections.emptySet() :
+                ownerProjects.stream()
+                        .map(p -> ((Number) p.get("id")).longValue())
+                        .collect(Collectors.toSet());
+
+        boolean allowed = timesheetProjectIds.stream().anyMatch(managerProjectIds::contains);
+        if (!allowed) {
+            continue; // skip this timesheet for this manager
+        }
+
+        // --- Create/update review ---
+        TimeSheetReview existingReview = reviewRepository.findByTimeSheetAndManagerId(ts, user.getId()).orElse(null);
+        if (existingReview != null) {
+            existingReview.setAction(status);
+            existingReview.setComment(bulkRequest.getComment());
+            existingReview.setReviewedAt(LocalDateTime.now());
+            reviewRepository.save(existingReview);
+        } else {
+            TimeSheetReview review = new TimeSheetReview();
+            review.setTimeSheet(ts);
+            review.setManagerId(user.getId());
+            review.setAction(status);
+            review.setComment(bulkRequest.getComment());
+            review.setReviewedAt(LocalDateTime.now());
+            reviewRepository.save(review);
+        }
+
+        // --- Recompute overall status ---
+        Set<Long> approverIds = new HashSet<>();
+        Map<Long, String> approverNames = new HashMap<>();
+
+        if (allProjects != null) {
+            for (Map<String, Object> p : allProjects) {
+                Long pid = ((Number) p.get("id")).longValue();
+                if (!timesheetProjectIds.contains(pid)) continue;
+
+                Map<String, Object> owner = (Map<String, Object>) p.get("owner");
+                if (owner != null) {
+                    Long ownerId = ((Number) owner.get("id")).longValue();
+                    String ownerName = (String) owner.get("name");
+                    approverIds.add(ownerId);
+                    approverNames.put(ownerId, ownerName);
+                }
             }
         }
 
-        return ResponseEntity.ok("Bulk timesheet review completed successfully.");
+        List<ActionStatusDTO> actionStatus = new ArrayList<>();
+        for (Long approverId : approverIds) {
+            Optional<TimeSheetReview> revOpt = reviewRepository.findByTimeSheetAndManagerId(ts, approverId);
+            String action = revOpt.map(TimeSheetReview::getAction).orElse("Pending");
+            String approverName = approverNames.getOrDefault(approverId, "Unknown Manager");
+            actionStatus.add(new ActionStatusDTO(approverId, approverName, action));
         }
+
+        boolean anyRejected = actionStatus.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
+        boolean allApproved = !actionStatus.isEmpty() && actionStatus.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+        boolean allPending = !actionStatus.isEmpty() && actionStatus.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+
+        String overall;
+        if (anyRejected) {
+            overall = "Rejected";
+        } else if (allApproved) {
+            overall = "Approved";
+        } else if (allPending) {
+            overall = "Pending";
+        } else {
+            overall = "Pending";
+        }
+
+        ts.setStatus(overall);
+        ts.setUpdatedAt(LocalDateTime.now());
+        timeSheetRepository.save(ts);
+    }
+
+    return ResponseEntity.ok("Bulk timesheet review completed successfully.");
+    }
+
 
 }
