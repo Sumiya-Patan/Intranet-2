@@ -5,9 +5,12 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,11 +20,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.TimeSheetDeleteRequest;
 import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
 import com.intranet.dto.TimeSheetEntryDTO;
 import com.intranet.dto.TimeSheetResponseDTO;
 import com.intranet.dto.TimeSheetUpdateRequestDTO;
 import com.intranet.dto.UserDTO;
+import com.intranet.entity.TimeSheet;
+import com.intranet.entity.TimeSheetEntry;
+import com.intranet.repository.TimeSheetRepo;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
@@ -35,6 +42,9 @@ public class TimeSheetController {
 
     @Autowired
     private TimeSheetService timeSheetService;
+
+    @Autowired
+    private TimeSheetRepo timeSheetRepository;
     
    @Operation(summary = "Create a new timesheet")
 
@@ -116,4 +126,53 @@ public class TimeSheetController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @Operation(summary = "Delete specific timesheet entries by timesheetId and entryIds")
+    @DeleteMapping("/entries")
+    @Transactional
+    public ResponseEntity<String> deleteTimeSheetEntries(
+        @RequestBody TimeSheetDeleteRequest request) {
+
+    // 1. Validate input
+    if (request.getTimesheetId() == null) {
+        return ResponseEntity.badRequest().body("timesheetId is required.");
+    }
+    if (request.getEntryIds() == null || request.getEntryIds().isEmpty()) {
+        return ResponseEntity.badRequest().body("At least one entryId must be provided.");
+    }
+
+    // 2. Fetch timesheet
+    TimeSheet timeSheet = timeSheetRepository.findById(request.getTimesheetId())
+            .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
+
+    // 3. Prevent deletion if timesheet is Approved
+    if ("Approved".equalsIgnoreCase(timeSheet.getStatus())) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body("Cannot delete entries from an Approved timesheet.");
+    }
+
+    // 4. Filter only the entries that belong to this timesheet + match given entryIds
+    List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()
+            .filter(entry -> request.getEntryIds().contains(entry.getTimesheetEntryId()))
+            .toList();
+
+    if (entriesToDelete.isEmpty()) {
+        return ResponseEntity.badRequest()
+                .body("No matching entries found in this timesheet for given IDs.");
+    }
+
+    // 5. Delete entries
+    timeSheet.getEntries().removeAll(entriesToDelete);
+
+    // 6. Check if any entries remain; if not, delete the timesheet itself
+    if (timeSheet.getEntries().isEmpty()) {
+        timeSheetRepository.delete(timeSheet);
+        return ResponseEntity.ok("Deleted all entries and timesheet " + request.getTimesheetId());
+    } else {
+        timeSheetRepository.save(timeSheet);
+        return ResponseEntity.ok("Deleted " + entriesToDelete.size() + " entry(s) from timesheet " + request.getTimesheetId());
+    }
+    }
+
+
 }
