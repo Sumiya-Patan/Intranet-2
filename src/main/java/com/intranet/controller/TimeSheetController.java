@@ -59,11 +59,19 @@ public class TimeSheetController {
         if (workDate == null) {
             workDate = LocalDate.now();
         }
+
+        // 2. Check if timesheet already exists for this user and date
+        boolean exists = timeSheetRepository.existsByUserIdAndWorkDate(user.getId(), workDate);
+        if (exists) {
+            return ResponseEntity.badRequest()
+                    .body("Timesheet already submitted for " + workDate);
+        }
+
         try {
             timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
             return ResponseEntity.ok("Timesheet submitted successfully.");
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body("Timesheet submission failed");
         }
     }
 

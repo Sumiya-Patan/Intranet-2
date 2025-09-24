@@ -1,5 +1,6 @@
 package com.intranet.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -16,6 +17,8 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
     List<TimeSheet> findByUserId(Long userId);
     
     List<TimeSheet> findByUserIdIn(Set<Long> userIds);
+
+    boolean existsByUserIdAndWorkDate(Long id, LocalDate workDate);
 
 }
 
