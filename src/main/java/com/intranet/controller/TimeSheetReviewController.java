@@ -88,7 +88,7 @@ public class TimeSheetReviewController {
     HttpEntity<Void> entity = new HttpEntity<>(headers);
 
     // 4. Verify manager owns at least one project in the timesheet
-    String ownerProjectsUrl = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
+    String ownerProjectsUrl = String.format("%s/projects/owner", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> ownerProjectsResp =
             restTemplate.exchange(ownerProjectsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
     List<Map<String, Object>> ownerProjects = ownerProjectsResp.getBody();
@@ -248,7 +248,7 @@ public class TimeSheetReviewController {
                 .collect(Collectors.toSet());
 
         // --- Validate this manager is owner of at least one project ---
-        String ownerProjectsUrl = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
+        String ownerProjectsUrl = String.format("%s/projects/owner", pmsBaseUrl);
         ResponseEntity<List<Map<String, Object>>> ownerProjectsResp =
                 restTemplate.exchange(ownerProjectsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
         List<Map<String, Object>> ownerProjects = ownerProjectsResp.getBody();

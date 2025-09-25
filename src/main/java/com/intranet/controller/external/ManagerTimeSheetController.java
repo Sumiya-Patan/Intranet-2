@@ -59,7 +59,7 @@ public class ManagerTimeSheetController {
     HttpEntity<Void> entity = new HttpEntity<>(headers);
 
     // Step 2: Get projects owned by this manager from PMS API
-    String url = String.format("%s/projects/owner/%d", pmsBaseUrl, user.getId());
+    String url = String.format("%s/projects/owner", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> response =
             restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
     List<Map<String, Object>> projects = response.getBody();
