@@ -74,8 +74,10 @@ public class TimeSheetController {
         for (int i = 0; i < entries.size(); i++) {
         TimeSheetEntryDTO entry = entries.get(i);
 
-        String key = entry.getProjectId() + "-" + entry.getTaskId() + "-" 
-                    + entry.getFromTime() + "-" + entry.getToTime();
+        // String key = entry.getProjectId() + "-" + entry.getTaskId() + "-" 
+        //             + entry.getFromTime() + "-" + entry.getToTime();
+
+        String key = entry.getFromTime() + "-" + entry.getToTime();
 
         entryCountMap.put(key, entryCountMap.getOrDefault(key, 0) + 1);
         int count = entryCountMap.get(key);
