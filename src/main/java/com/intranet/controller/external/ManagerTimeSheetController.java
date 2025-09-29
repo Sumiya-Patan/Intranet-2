@@ -74,11 +74,6 @@ public class ManagerTimeSheetController {
             .map(m -> ((Number) m.get("id")).longValue())
             .collect(Collectors.toSet());
 
-    // Step 3b: Collect all project IDs owned by this manager
-    Set<Long> managerProjectIds = projects.stream()
-            .map(p -> ((Number) p.get("id")).longValue())
-            .collect(Collectors.toSet());
-
     // Step 4: Fetch all timesheets for these memberIds
     List<TimeSheet> allTimeSheets = timeSheetRepository.findByUserIdIn(memberIds);
 

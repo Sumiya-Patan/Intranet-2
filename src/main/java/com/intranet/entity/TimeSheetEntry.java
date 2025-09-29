@@ -42,7 +42,7 @@ public class TimeSheetEntry {
     @Column(length = 50, nullable = false)
     private String workType = "Office";
 
-    @Column(length = 50,nullable = false)
+    @Column(length = 50)
     private String workLocation;
 
     @Column

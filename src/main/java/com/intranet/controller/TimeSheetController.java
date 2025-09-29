@@ -1,5 +1,7 @@
 package com.intranet.controller;
 
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -88,6 +90,21 @@ public class TimeSheetController {
         }
         }
 
+        // 3. Validate total hours >= 8
+        BigDecimal totalHours = BigDecimal.ZERO;
+        for (TimeSheetEntryDTO entry : entries) {
+            if (entry.getFromTime() != null && entry.getToTime() != null) {
+                long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
+                totalHours = totalHours.add(BigDecimal.valueOf(minutes / 60.0));
+            } else if (entry.getHoursWorked() != null) {
+                totalHours = totalHours.add(entry.getHoursWorked());
+            }
+        }
+
+        if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+            return ResponseEntity.badRequest()
+                    .body("Total hours worked (" + totalHours + ") must be at least 8 hours.");
+        }
 
         try {
             timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
