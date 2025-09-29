@@ -196,9 +196,107 @@ public class TimeSheetService {
     }).toList();
     }
 
+    public List<TimeSheetResponseDTO> getUserTimeSheetHistoryByDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
+    // Step 1: Fetch all timesheets of the user within date range
+    List<TimeSheet> timesheets = timeSheetRepository
+            .findByUserIdAndWorkDateBetweenOrderByWorkDateDesc(userId, startDate, endDate);
 
+    if (timesheets.isEmpty()) return Collections.emptyList();
 
+    // Step 2: Fetch all projects from PMS API
+    String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+    ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
+            projectsUrl,
+            HttpMethod.GET,
+            buildEntityWithAuth(),
+            new ParameterizedTypeReference<>() {}
+    );
+    List<Map<String, Object>> projects = projectResponse.getBody();
 
+    final Map<Long, Map<String, Object>> projectMap = (projects != null)
+            ? projects.stream().collect(Collectors.toMap(
+                p -> ((Number) p.get("id")).longValue(),
+                p -> p
+            ))
+            : new HashMap<>();
+
+    // Step 3: Map timesheets to DTOs (same as your existing method)
+    return timesheets.stream().map(ts -> {
+        TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
+        dto.setTimesheetId(ts.getTimesheetId());
+        dto.setUserId(ts.getUserId());
+        dto.setWorkDate(ts.getWorkDate());
+
+        // Map timesheet entries
+        List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
+            TimeSheetEntryResponseDTO entryDto = new TimeSheetEntryResponseDTO();
+            entryDto.setTimesheetEntryId(entry.getTimesheetEntryId());
+            entryDto.setProjectId(entry.getProjectId());
+            entryDto.setTaskId(entry.getTaskId());
+            entryDto.setDescription(entry.getDescription());
+            entryDto.setWorkType(entry.getWorkType());
+            entryDto.setWorkLocation(entry.getWorkLocation());
+            entryDto.setIsBillable(entry.getIsBillable());
+            entryDto.setFromTime(entry.getFromTime());
+            entryDto.setToTime(entry.getToTime());
+            entryDto.setHoursWorked(entry.getHoursWorked());
+            entryDto.setOtherDescription(entry.getOtherDescription());
+            return entryDto;
+        }).toList();
+        dto.setEntries(entries);
+
+        // Step 4: Build actionStatus list
+        List<ActionStatusDTO> actionStatusList = new ArrayList<>();
+        for (TimeSheetEntry entry : ts.getEntries()) {
+            Map<String, Object> project = projectMap.get(entry.getProjectId());
+            if (project == null) continue;
+
+            Map<String, Object> owner = (Map<String, Object>) project.get("owner");
+            if (owner == null) continue;
+
+            Long managerId = ((Number) owner.get("id")).longValue();
+            String managerName = (String) owner.get("name");
+
+            Optional<TimeSheetReview> reviewOpt = ts.getReviews().stream()
+                    .filter(r -> r.getManagerId().equals(managerId))
+                    .findFirst();
+
+            String action = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
+
+            // Avoid duplicate approvers
+            boolean exists = actionStatusList.stream().anyMatch(a -> a.getApproverId().equals(managerId));
+            if (!exists) {
+                actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
+            }
+        }
+
+        // Step 5: Compute overall timesheet status
+        if (actionStatusList.isEmpty()) {
+            dto.setStatus("Pending");
+            dto.setActionStatus(null);
+        } else {
+            boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
+            boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+            boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+            boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+
+            if (anyRejected) {
+                dto.setStatus("Rejected");
+            } else if (allApproved) {
+                dto.setStatus("Approved");
+            } else if (anyApproved) {
+                dto.setStatus("Partially Approved");
+            } else if (allPending) {
+                dto.setStatus("Pending");
+            } else {
+                dto.setStatus("Pending"); // fallback
+            }
+            dto.setActionStatus(actionStatusList);
+        }
+
+        return dto;
+    }).toList();
+    }
 
     @Transactional
     public void partialUpdateTimesheet(Long timesheetId, TimeSheetUpdateRequestDTO dto) {

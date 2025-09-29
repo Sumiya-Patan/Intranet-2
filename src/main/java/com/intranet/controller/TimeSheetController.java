@@ -126,6 +126,33 @@ public class TimeSheetController {
     }
 
 
+    @Operation(summary = "Get user's timesheet history within a date range")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @GetMapping("/history/range")
+    public ResponseEntity<?> getTimeSheetHistoryByDateRange(
+        @CurrentUser UserDTO user,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+        HttpServletRequest request) {
+
+    if (startDate == null || endDate == null) {
+        return ResponseEntity.badRequest().body("Start date and end date are required.");
+    }
+
+    // ✅ Validation: startDate must be strictly before endDate
+    if (startDate.isAfter(endDate) || startDate.isEqual(endDate)) {
+        return ResponseEntity.badRequest()
+                .body("Invalid date range: startDate must be earlier than endDate.");
+    }
+
+    List<TimeSheetResponseDTO> history =
+            timeSheetService.getUserTimeSheetHistoryByDateRange(user.getId(), startDate, endDate);
+
+    return ResponseEntity.ok(history);
+    }
+
+
+
     @Operation(summary = "Update a timesheet")
     // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('HR')")
     // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
