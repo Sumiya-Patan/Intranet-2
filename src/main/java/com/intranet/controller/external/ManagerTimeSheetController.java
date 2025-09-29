@@ -109,22 +109,22 @@ public class ManagerTimeSheetController {
 
     // Step 7: Map to DTO and filter entries based on manager's projects
     List<TimeSheetResponseDTO> result = filteredStream.map(ts -> {
-    // Filter entries that belong to manager's projects
     List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream()
-            .filter(entry -> managerProjectIds.contains(entry.getProjectId()))
-            .map(entry -> {
-                TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
-                dto.setTimesheetEntryId(entry.getTimesheetEntryId());
-                dto.setProjectId(entry.getProjectId());
-                dto.setTaskId(entry.getTaskId());
-                dto.setDescription(entry.getDescription());
-                dto.setWorkType(entry.getWorkType());
-                dto.setHoursWorked(entry.getHoursWorked());
-                dto.setFromTime(entry.getFromTime());
-                dto.setToTime(entry.getToTime());
-                dto.setOtherDescription(entry.getOtherDescription());
-                return dto;
-            }).toList();
+        .map(entry -> {
+            TimeSheetEntryResponseDTO dto = new TimeSheetEntryResponseDTO();
+            dto.setTimesheetEntryId(entry.getTimesheetEntryId());
+            dto.setProjectId(entry.getProjectId());
+            dto.setTaskId(entry.getTaskId());
+            dto.setDescription(entry.getDescription());
+            dto.setWorkLocation(entry.getWorkLocation());
+            dto.setIsBillable(entry.getIsBillable());
+            dto.setWorkType(entry.getWorkType());
+            dto.setHoursWorked(entry.getHoursWorked());
+            dto.setFromTime(entry.getFromTime());
+            dto.setToTime(entry.getToTime());
+            dto.setOtherDescription(entry.getOtherDescription());
+            return dto;
+        }).toList();
 
     if (entries.isEmpty()) return null; // Skip if no relevant entries
 

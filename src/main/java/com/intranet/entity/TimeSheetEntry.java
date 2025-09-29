@@ -42,6 +42,12 @@ public class TimeSheetEntry {
     @Column(length = 50, nullable = false)
     private String workType = "Office";
 
+    @Column(length = 50,nullable = false)
+    private String workLocation;
+
+    @Column
+    private Boolean isBillable = false;
+
     @Column
     private BigDecimal hoursWorked;
 
