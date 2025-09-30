@@ -156,7 +156,7 @@ public class TimeSheetController {
 
         if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
             return ResponseEntity.badRequest()
-                    .body("Total hours worked (" + totalHours + ") must be at least 8 hours.");
+                    .body("Total hours must be at least 8 hours.");
         }
 
         try {
