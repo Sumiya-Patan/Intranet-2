@@ -6,7 +6,7 @@ REM CONFIGURATION
 REM ================================
 set VM_USER=pavesadmin
 set VM_PASS=paves@2025
-set VM_HOST=192.168.2.24
+set VM_HOST=192.168.2.43
 set VM_TARGET_DIR=/home/pavesadmin/timesheet-app
 set JAR_PATH=target\TimeSheetManagement.jar
 
