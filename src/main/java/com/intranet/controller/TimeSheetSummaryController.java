@@ -4,15 +4,15 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.StartEndDateReqDTO;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
@@ -30,11 +30,13 @@ public class TimeSheetSummaryController {
 
     @Operation(summary = "Get timesheet summary between two dates")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
-    @GetMapping("/summary")
+    @PostMapping("/summary")
     public ResponseEntity<?> getTimeSheetSummary(
         @CurrentUser UserDTO user,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        @RequestBody StartEndDateReqDTO request) {
+
+    LocalDate startDate = request.getStartDate();
+    LocalDate endDate = request.getEndDate();
 
     if (startDate == null || endDate == null) {
         return ResponseEntity.badRequest().body("Start and End date are required");
