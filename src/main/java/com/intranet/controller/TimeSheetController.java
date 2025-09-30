@@ -96,27 +96,26 @@ public class TimeSheetController {
 
         HttpEntity<Void> entity = buildEntityWithAuth();
          // 🔹 Step 1: Check if the date is a public holiday via LMS API
-    String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
-    try {
-        ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
-                holidayUrl,
-                HttpMethod.GET,
-                entity,
-                new ParameterizedTypeReference<>() {}
-        );
+        String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
+        try {
+            ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
+                    holidayUrl,
+                    HttpMethod.GET,
+                    entity,
+                    new ParameterizedTypeReference<>() {}
+            );
 
-        Map<String, Object> holidayBody = holidayResponse.getBody();
-        if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
-            return ResponseEntity.badRequest()
-                    .body("Cannot submit timesheet on " + workDate + 
-                          " (" + holidayBody.get("message") + ")");
+            Map<String, Object> holidayBody = holidayResponse.getBody();
+            if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
+                return ResponseEntity.badRequest()
+                        .body("Failed to submit timesheet on Public Holiday: "+holidayBody.get("message"));
+            }
+        } catch (Exception e) {
+            // Optional: log the error but don't block timesheet submission if holiday API is down
+            System.err.println("Holiday API check failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body("Unable to verify public holiday status. Please try again later.");
         }
-    } catch (Exception e) {
-        // Optional: log the error but don't block timesheet submission if holiday API is down
-        System.err.println("Holiday API check failed: " + e.getMessage());
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body("Unable to verify public holiday status. Please try again later.");
-    }
 
         // 2. Check if timesheet already exists for this user and date
         boolean exists = timeSheetRepository.existsByUserIdAndWorkDate(user.getId(), workDate);
