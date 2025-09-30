@@ -12,7 +12,7 @@ public class TimeSheetEntryResponseDTO {
     private Long taskId;
     private String description;
     private String workType;
-    private String workLocation;
+    // private String workLocation;
     private Boolean isBillable;
     private LocalDateTime fromTime;
     private LocalDateTime toTime;

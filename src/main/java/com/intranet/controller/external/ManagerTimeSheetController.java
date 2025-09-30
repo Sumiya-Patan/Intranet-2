@@ -111,7 +111,7 @@ public class ManagerTimeSheetController {
             dto.setProjectId(entry.getProjectId());
             dto.setTaskId(entry.getTaskId());
             dto.setDescription(entry.getDescription());
-            dto.setWorkLocation(entry.getWorkLocation());
+            // dto.setWorkLocation(entry.getWorkLocation());
             dto.setIsBillable(entry.getIsBillable());
             dto.setWorkType(entry.getWorkType());
             dto.setHoursWorked(entry.getHoursWorked());

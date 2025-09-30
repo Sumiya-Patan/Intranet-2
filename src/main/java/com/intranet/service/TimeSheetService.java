@@ -82,7 +82,7 @@ public class TimeSheetService {
         entry.setProjectId(dto.getProjectId());
         entry.setTaskId(dto.getTaskId());
         entry.setDescription(dto.getDescription());
-        entry.setWorkLocation(dto.getWorkLocation());
+        // entry.setWorkLocation(dto.getWorkLocation());
         entry.setIsBillable(dto.getIsBillable());
         entry.setWorkType(dto.getWorkType());
         entry.setFromTime(dto.getFromTime());
@@ -134,7 +134,7 @@ public class TimeSheetService {
             entryDto.setTaskId(entry.getTaskId());
             entryDto.setDescription(entry.getDescription());
             entryDto.setWorkType(entry.getWorkType());
-            entryDto.setWorkLocation(entry.getWorkLocation());
+            // entryDto.setWorkLocation(entry.getWorkLocation());
             entryDto.setIsBillable(entry.getIsBillable());
             entryDto.setFromTime(entry.getFromTime());
             entryDto.setToTime(entry.getToTime());
@@ -235,7 +235,7 @@ public class TimeSheetService {
             entryDto.setTaskId(entry.getTaskId());
             entryDto.setDescription(entry.getDescription());
             entryDto.setWorkType(entry.getWorkType());
-            entryDto.setWorkLocation(entry.getWorkLocation());
+            // entryDto.setWorkLocation(entry.getWorkLocation());
             entryDto.setIsBillable(entry.getIsBillable());
             entryDto.setFromTime(entry.getFromTime());
             entryDto.setToTime(entry.getToTime());
@@ -318,7 +318,7 @@ public class TimeSheetService {
             if (entryDto.getTaskId() != null) entry.setTaskId(entryDto.getTaskId());
             if (entryDto.getDescription() != null) entry.setDescription(entryDto.getDescription());
             if (entryDto.getWorkType() != null) entry.setWorkType(entryDto.getWorkType());
-            if (entryDto.getWorkLocation() != null) entry.setWorkLocation(entryDto.getWorkLocation());
+            // if (entryDto.getWorkLocation() != null) entry.setWorkLocation(entryDto.getWorkLocation());
             if (entryDto.getIsBillable() != null) entry.setIsBillable(entryDto.getIsBillable());
             if (entryDto.getFromTime() != null) entry.setFromTime(entryDto.getFromTime());
             if (entryDto.getToTime() != null) entry.setToTime(entryDto.getToTime());
@@ -356,7 +356,7 @@ public class TimeSheetService {
             entryDTO.setTaskId(entry.getTaskId());
             entryDTO.setDescription(entry.getDescription());
             entryDTO.setWorkType(entry.getWorkType());
-            entryDTO.setWorkLocation(entry.getWorkLocation());
+            // entryDTO.setWorkLocation(entry.getWorkLocation());
             entryDTO.setIsBillable(entry.getIsBillable());
             entryDTO.setFromTime(entry.getFromTime());
             entryDTO.setToTime(entry.getToTime());
@@ -394,7 +394,7 @@ public class TimeSheetService {
             entry.setTaskId(dto.getTaskId());
             entry.setDescription(dto.getDescription());
             entry.setWorkType(dto.getWorkType());
-            entry.setWorkLocation(dto.getWorkLocation());
+            // entry.setWorkLocation(dto.getWorkLocation());
             entry.setIsBillable(dto.getIsBillable());
 
             // Calculate hoursWorked from fromTime and toTime

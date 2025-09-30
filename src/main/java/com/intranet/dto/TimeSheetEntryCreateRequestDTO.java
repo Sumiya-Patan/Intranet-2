@@ -15,7 +15,7 @@ public class TimeSheetEntryCreateRequestDTO {
     private Long taskId;
     private String description;
     private String workType;
-    private String workLocation;
+    // private String workLocation;
     private Boolean isBillable;
     private BigDecimal hoursWorked;
     private LocalDateTime fromTime;
