@@ -29,7 +29,7 @@ public class TimeSheetSummaryController {
     private TimeSheetService timeSheetService;
 
     @Operation(summary = "Get timesheet summary between two dates")
-    // @PreAuthorize("hasAuthority('VIEW_TIMESHEET_SUMMARY')")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping("/summary")
     public ResponseEntity<?> getTimeSheetSummary(
         @CurrentUser UserDTO user,
