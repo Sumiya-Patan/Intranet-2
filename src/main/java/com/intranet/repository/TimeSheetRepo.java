@@ -22,6 +22,8 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
     
     List<TimeSheet> findByUserIdAndWorkDateBetweenOrderByWorkDateDesc(Long userId, LocalDate startDate, LocalDate endDate);
 
+    List<TimeSheet> findByUserIdAndWorkDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
+
 
 }
 

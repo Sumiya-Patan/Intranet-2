@@ -1,10 +1,13 @@
 package com.intranet.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -573,6 +576,111 @@ public class TimeSheetService {
                     return new ManagerUserMappingDTO(managerId, managerName, projects);
                 })
                 .toList();
+    }
+
+     public Map<String, Object> getSummary(Long userId, LocalDate startDate, LocalDate endDate) {
+        HttpEntity<Void> entity = buildEntityWithAuth();
+        // ✅ 1. Fetch projects from PMS
+        String url = pmsBaseUrl + "/projects";
+        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<>() {}
+        );
+
+        Map<Long, String> projectMap = response.getBody().stream()
+                .collect(Collectors.toMap(
+                        p -> ((Number) p.get("id")).longValue(),
+                        p -> (String) p.get("name")
+                ));
+
+        // ✅ 2. Fetch timesheets for user in range
+        List<TimeSheet> sheets = timeSheetRepository
+                .findByUserIdAndWorkDateBetween(userId, startDate, endDate);
+
+        // Flatten entries
+        List<TimeSheetEntry> entries = sheets.stream()
+                .flatMap(s -> s.getEntries().stream())
+                .toList();
+
+        // ✅ 3. Timesheet Summary
+        Map<String, Long> timesheetSummary = Map.of(
+                "pending", sheets.stream().filter(s -> "Pending".equalsIgnoreCase(s.getStatus())).count(),
+                "approved", sheets.stream().filter(s -> "Approved".equalsIgnoreCase(s.getStatus())).count(),
+                "rejected", sheets.stream().filter(s -> "Rejected".equalsIgnoreCase(s.getStatus())).count()
+        );
+
+        // ✅ 4. Billable Activity
+        long billableLogs = entries.stream().filter(e -> Boolean.TRUE.equals(e.getIsBillable())).count();
+        long nonBillableLogs = entries.size() - billableLogs;
+        Map<String, Long> billableActivity = Map.of(
+                "billableLogs", billableLogs,
+                "nonBillableLogs", nonBillableLogs
+        );
+
+        // ✅ 5. Project Summary
+        Map<Long, BigDecimal> projectHours = entries.stream()
+                .collect(Collectors.groupingBy(
+                        TimeSheetEntry::getProjectId,
+                        Collectors.reducing(
+                                BigDecimal.ZERO,
+                                this::calculateHours,
+                                BigDecimal::add
+                        )
+                ));
+
+        List<Map<String, Object>> projectSummary = projectHours.entrySet().stream()
+            .map(e -> {
+        Map<String, Object> map = new HashMap<>();
+        map.put("projectId", e.getKey());
+        map.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
+        map.put("totalHoursWorked", e.getValue());
+        return map;
+        })
+        .collect(Collectors.toList());
+
+
+        // ✅ 6. Weekly Summary (group by day of week with 2 decimal rounding)
+        Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
+            .collect(Collectors.toMap(
+                    d -> d.name().toLowerCase(), // monday, tuesday...
+                    d -> BigDecimal.ZERO,
+                    (a, b) -> a,
+                    LinkedHashMap::new
+            ));
+
+            entries.forEach(entry -> {
+            LocalDate workDate = entry.getTimeSheet().getWorkDate();
+            DayOfWeek day = workDate.getDayOfWeek();
+            BigDecimal hours = calculateHours(entry); // Your method to get hours for the entry
+
+            // Merge and round to 2 decimals
+            weeklySummary.merge(
+                    day.name().toLowerCase(),
+                    hours.setScale(2, RoundingMode.HALF_UP),
+                    (oldVal, newVal) -> oldVal.add(newVal).setScale(2, RoundingMode.HALF_UP)
+            );
+            });
+
+
+        // ✅ 7. Final Response
+        return Map.of(
+                "timesheetSummary", timesheetSummary,
+                "billableActivity", billableActivity,
+                "projectSummary", projectSummary,
+                "weeklySummary", weeklySummary
+        );
+    }
+
+    private BigDecimal calculateHours(TimeSheetEntry entry) {
+        if (entry.getFromTime() != null && entry.getToTime() != null) {
+            long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
+            return BigDecimal.valueOf(minutes / 60.0);
+        } else if (entry.getHoursWorked() != null) {
+            return entry.getHoursWorked();
+        }
+        return BigDecimal.ZERO;
     }
 
 }
