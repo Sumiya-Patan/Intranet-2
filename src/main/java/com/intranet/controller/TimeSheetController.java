@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 
 import com.intranet.dto.TimeSheetDeleteRequest;
 import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
@@ -49,9 +57,31 @@ public class TimeSheetController {
 
     @Autowired
     private TimeSheetRepo timeSheetRepository;
-    
-   @Operation(summary = "Create a new timesheet")
 
+    @Value("${lms.api.base-url}")
+    private String lmsBaseUrl;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    private HttpEntity<Void> buildEntityWithAuth() {
+    ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    if (attrs == null) {
+        return (HttpEntity<Void>) HttpEntity.EMPTY;
+    }
+
+    HttpServletRequest request = attrs.getRequest();
+    String authHeader = request.getHeader("Authorization");
+
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader);
+    }
+
+    return new HttpEntity<>(headers);
+    }
+
+
+   @Operation(summary = "Create a new timesheet")
     // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
    @PostMapping("/create")
@@ -63,6 +93,30 @@ public class TimeSheetController {
         if (workDate == null) {
             workDate = LocalDate.now();
         }
+
+        HttpEntity<Void> entity = buildEntityWithAuth();
+         // 🔹 Step 1: Check if the date is a public holiday via LMS API
+    String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
+    try {
+        ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
+                holidayUrl,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<>() {}
+        );
+
+        Map<String, Object> holidayBody = holidayResponse.getBody();
+        if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
+            return ResponseEntity.badRequest()
+                    .body("Cannot submit timesheet on " + workDate + 
+                          " (" + holidayBody.get("message") + ")");
+        }
+    } catch (Exception e) {
+        // Optional: log the error but don't block timesheet submission if holiday API is down
+        System.err.println("Holiday API check failed: " + e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Unable to verify public holiday status. Please try again later.");
+    }
 
         // 2. Check if timesheet already exists for this user and date
         boolean exists = timeSheetRepository.existsByUserIdAndWorkDate(user.getId(), workDate);
