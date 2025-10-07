@@ -143,18 +143,31 @@ public class TimeSheetController {
         }
         }
 
-        // 3. Validate total hours >= 8
         BigDecimal totalHours = BigDecimal.ZERO;
         for (TimeSheetEntryDTO entry : entries) {
             if (entry.getFromTime() != null && entry.getToTime() != null) {
                 long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
-                totalHours = totalHours.add(BigDecimal.valueOf(minutes / 60.0));
+                long hoursPart = minutes / 60;
+                long minutesPart = minutes % 60;
+
+                // Convert to hours.minutes format, e.g., 5 hours 40 min => 5.40
+                BigDecimal hoursWorked = new BigDecimal(hoursPart + "." + String.format("%02d", minutesPart));
+                totalHours = totalHours.add(hoursWorked);
+
+                // Store in the entry
+                entry.setHoursWorked(hoursWorked);
             } else if (entry.getHoursWorked() != null) {
                 totalHours = totalHours.add(entry.getHoursWorked());
             }
         }
+        
+        // Convert totalHours (HH.mm) to total minutes
+        String[] parts = totalHours.toPlainString().split("\\.");
+        long hours = Long.parseLong(parts[0]);
+        long minutes = parts.length > 1 ? Long.parseLong(parts[1]) : 0;
+        long totalMinutes = hours * 60 + minutes;
 
-        if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+        if (totalMinutes < 8 * 60) { // 8 hours = 480 minutes
             return ResponseEntity.badRequest()
                     .body("Total hours must be at least 8 hours.");
         }
@@ -246,12 +259,7 @@ public class TimeSheetController {
             @PathVariable Long timesheetId,
             @RequestBody List<TimeSheetEntryCreateRequestDTO> newEntries, HttpServletRequest request) {
 
-        boolean success = timeSheetService.addEntriesToTimeSheet(timesheetId, newEntries);
-        if (success) {
-            return ResponseEntity.ok("New entry(ies) added to timesheet: " + timesheetId);
-        } else {
-            return ResponseEntity.notFound().build();
-        }
+        return timeSheetService.addEntriesToTimeSheet(timesheetId, newEntries);
     }
 
     @Operation(summary = "Delete specific timesheet entries by timesheetId and entryIds")

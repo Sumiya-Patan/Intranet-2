@@ -18,6 +18,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -36,9 +37,11 @@ import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.dto.external.ProjectWithUsersDTO;
 import com.intranet.dto.external.TaskDTO;
+import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.entity.TimeSheetReview;
+import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,6 +59,9 @@ public class TimeSheetService {
 
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
+
+    @Autowired
+    private InternalProjectRepo internalProjectRepository;
     
   public void createTimeSheetWithEntries(
         Long userId,
@@ -105,6 +111,17 @@ public class TimeSheetService {
     List<TimeSheet> timesheets = timeSheetRepository.findByUserIdOrderByWorkDateDesc(userId);
     if (timesheets.isEmpty()) return Collections.emptyList();
 
+    // Step 2: Fetch internal projects
+    List<InternalProject> internalProjects = internalProjectRepository.findAll();
+    Map<Long, Map<String, Object>> combinedProjectMap = new HashMap<>();
+
+    for (InternalProject ip : internalProjects) {
+        Map<String, Object> internalMap = new HashMap<>();
+        internalMap.put("id", ip.getProjectId());
+        internalMap.put("name", ip.getProjectName());
+        combinedProjectMap.put(ip.getProjectId().longValue(), internalMap);
+    }
+
     // Step 2: Fetch all projects from PMS API
     String projectsUrl = String.format("%s/projects", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
@@ -115,12 +132,14 @@ public class TimeSheetService {
     );
     List<Map<String, Object>> projects = projectResponse.getBody();
 
-    final Map<Long, Map<String, Object>> projectMap = (projects != null)
-            ? projects.stream().collect(Collectors.toMap(
-                p -> ((Number) p.get("id")).longValue(),
-                p -> p
-            ))
-            : new HashMap<>();
+    
+    if (projects != null) {
+        for (Map<String, Object> p : projects) {
+            Long projectId = ((Number) p.get("id")).longValue();
+            // Only add PMS project if not already in internal projects
+            combinedProjectMap.putIfAbsent(projectId, p);
+        }
+    }
 
     // Step 3: Map timesheets to DTOs
     return timesheets.stream().map(ts -> {
@@ -150,7 +169,7 @@ public class TimeSheetService {
         // Step 4: Build actionStatus list
         List<ActionStatusDTO> actionStatusList = new ArrayList<>();
         for (TimeSheetEntry entry : ts.getEntries()) {
-            Map<String, Object> project = projectMap.get(entry.getProjectId());
+            Map<String, Object> project = combinedProjectMap.get(entry.getProjectId());
             if (project == null) continue;
 
             Map<String, Object> owner = (Map<String, Object>) project.get("owner");
@@ -170,6 +189,17 @@ public class TimeSheetService {
             if (!exists) {
                 actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
             }
+        }
+
+        // Step 6: Add supervisor from Resource Management (mocked)
+        Long supervisorId = 999L; // mock ID
+        String supervisorName = "Supervisor Mock"; // mock name
+
+        boolean supervisorExists = actionStatusList.stream()
+                .anyMatch(a -> a.getApproverId().equals(supervisorId));
+
+        if (!supervisorExists) {
+            actionStatusList.add(new ActionStatusDTO(supervisorId, supervisorName, "Pending"));
         }
 
         // Step 5: Compute overall timesheet status based on actionStatus
@@ -379,50 +409,76 @@ public class TimeSheetService {
     }
 
 
-    public boolean addEntriesToTimeSheet(Long timesheetId, List<TimeSheetEntryCreateRequestDTO> newEntries) {
-        Optional<TimeSheet> optional = timeSheetRepository.findById(timesheetId);
-        if (optional.isEmpty()) {
-            return false;
-        }
-
-        TimeSheet timeSheet = optional.get();
-        if(timeSheet.getStatus().equals("Approved") || timeSheet.getStatus().equals("APPRO")) {    
-                return false;
-        }
-
-        for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
-            TimeSheetEntry entry = new TimeSheetEntry();
-            entry.setTimeSheet(timeSheet);
-            entry.setProjectId(dto.getProjectId());
-            entry.setTaskId(dto.getTaskId());
-            entry.setDescription(dto.getDescription());
-            entry.setWorkType(dto.getWorkType());
-            // entry.setWorkLocation(dto.getWorkLocation());
-            entry.setIsBillable(dto.getIsBillable());
-
-            // Calculate hoursWorked from fromTime and toTime
-            if (dto.getFromTime() != null && dto.getToTime() != null && !dto.getToTime().isBefore(dto.getFromTime())) {
-                Duration duration = Duration.between(dto.getFromTime(), dto.getToTime());
-                double hours = duration.toMinutes() / 60.0;
-                entry.setHoursWorked(BigDecimal.valueOf(hours));
-            } else {
-                entry.setHoursWorked(BigDecimal.ZERO); // fallback or default
-            }
-
-            entry.setFromTime(dto.getFromTime());
-            entry.setToTime(dto.getToTime());
-            entry.setOtherDescription(dto.getOtherDescription());
-
-            timeSheet.getEntries().add(entry);
-        }
-
-        timeSheet.setUpdatedAt(LocalDateTime.now());
-        timeSheet.setStatus("Pending");
-        timeSheetRepository.save(timeSheet);
-        return true;
+    public ResponseEntity<String> addEntriesToTimeSheet(Long timesheetId, List<TimeSheetEntryCreateRequestDTO> newEntries) {
+    Optional<TimeSheet> optional = timeSheetRepository.findById(timesheetId);
+    if (optional.isEmpty()) {
+        return ResponseEntity.badRequest().body("Timesheet not found");
     }
 
+    TimeSheet timeSheet = optional.get();
+    if (timeSheet.getStatus().equalsIgnoreCase("Approved")) {    
+        return ResponseEntity.badRequest().body("Cannot add entries to an approved timesheet");
+    }
 
+    List<TimeSheetEntry> existingEntries = timeSheet.getEntries();
+
+    for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
+        if (dto.getFromTime() == null || dto.getToTime() == null || dto.getToTime().isBefore(dto.getFromTime())) {
+            return ResponseEntity.badRequest().body("Invalid fromTime/toTime for entry");
+        }
+
+        // Check overlap with existing entries
+        boolean overlapsExisting = existingEntries.stream().anyMatch(e ->
+            timesOverlap(e.getFromTime(), e.getToTime(), dto.getFromTime(), dto.getToTime())
+        );
+        if (overlapsExisting) {
+            return ResponseEntity.badRequest().body("New entry overlaps with an existing entry");
+        }
+
+        // Check overlap with other new entries in batch
+        boolean overlapsNewEntries = newEntries.stream()
+                .filter(other -> other != dto)
+                .anyMatch(other -> timesOverlap(other.getFromTime(), other.getToTime(), dto.getFromTime(), dto.getToTime()));
+        if (overlapsNewEntries) {
+            return ResponseEntity.badRequest().body("New entries in the batch overlap with each other");
+        }
+
+        // Create entry
+        TimeSheetEntry entry = new TimeSheetEntry();
+        entry.setTimeSheet(timeSheet);
+        entry.setProjectId(dto.getProjectId());
+        entry.setTaskId(dto.getTaskId());
+        entry.setDescription(dto.getDescription());
+        entry.setWorkType(dto.getWorkType());
+        entry.setIsBillable(dto.getIsBillable());
+        entry.setFromTime(dto.getFromTime());
+        entry.setToTime(dto.getToTime());
+
+        // ✅ Convert duration to HH.mm format
+        Duration duration = Duration.between(dto.getFromTime(), dto.getToTime());
+        long hoursPart = duration.toHours();
+        long minutesPart = duration.toMinutes() % 60;
+
+        BigDecimal hoursWorked = new BigDecimal(hoursPart + "." + String.format("%02d", minutesPart));
+        entry.setHoursWorked(hoursWorked);
+
+        entry.setOtherDescription(dto.getOtherDescription());
+        timeSheet.getEntries().add(entry);
+    }
+
+    timeSheet.setUpdatedAt(LocalDateTime.now());
+    timeSheet.setStatus("Pending");
+    timeSheetRepository.save(timeSheet);
+
+    return ResponseEntity.ok("Entries added successfully");
+    }
+
+    /** Returns true if two time intervals overlap. */
+    private boolean timesOverlap(LocalDateTime start1, LocalDateTime end1, LocalDateTime start2, LocalDateTime end2) {
+        return !start1.isAfter(end2) && !start2.isAfter(end1);
+    }
+
+    
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -445,39 +501,50 @@ public class TimeSheetService {
     }
 
     public List<ProjectTaskView> getUserTaskView(Long userId) {
-    // Call PMS API dynamically using configured base URL
+    // 🔹 Step 1: Call PMS API dynamically using configured base URL
     String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
 
     ResponseEntity<List<Map<String, Object>>> response =
-            restTemplate.exchange(url, HttpMethod.GET, buildEntityWithAuth(),
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    buildEntityWithAuth(),
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
 
     List<Map<String, Object>> taskData = response.getBody();
     if (taskData == null || taskData.isEmpty()) {
-        return Collections.emptyList();
+        taskData = Collections.emptyList();
     }
 
-    // Group tasks by projectId
+    // 🔹 Step 2: Group external PMS tasks by projectId
     Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
 
     for (Map<String, Object> task : taskData) {
-        Long taskId = ((Number) task.get("id")).longValue();
+        Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
         String taskName = (String) task.get("title");
         String description = (String) task.get("description");
 
-        // Extract project info from nested "project" object
+        // Extract project info safely
         Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
-        Long projectId = projectObj != null && projectObj.get("id") != null
-                ? ((Number) projectObj.get("id")).longValue()
-                : null;
-        String projectName = projectObj != null ? (String) projectObj.get("name") : null;
+        Long projectId = null;
+        final String projectName;
+
+        if (projectObj != null) {
+            Object idObj = projectObj.get("id");
+            if (idObj instanceof Number) {
+                projectId = ((Number) idObj).longValue();
+            }
+            projectName = (String) projectObj.get("name");
+        } else {
+            projectName = null;
+        }
 
         String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
         String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
 
         TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
 
-        // Add to project grouping
         if (projectId != null) {
             projectMap
                 .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
@@ -486,8 +553,36 @@ public class TimeSheetService {
         }
     }
 
-    return new ArrayList<>(projectMap.values());
-}
+    // 🔹 Step 3: Fetch Internal Projects from DB
+    List<InternalProject> internalProjects = internalProjectRepository.findAll();
+    Map<Long, ProjectTaskView> internalMap = new LinkedHashMap<>();
+
+    for (InternalProject ip : internalProjects) {
+        Long projectId = ip.getProjectId() != null ? ip.getProjectId().longValue() : null;
+        Long taskId = ip.getTaskId() != null ? ip.getTaskId().longValue() : null;
+
+        internalMap
+            .computeIfAbsent(projectId != null ? projectId : 0L,
+                    pid -> new ProjectTaskView(pid, ip.getProjectName(), new ArrayList<>()))
+            .getTasks()
+            .add(new TaskDTO(
+                    taskId,
+                    ip.getTaskName(),
+                    null, // description
+                    null, // startTime
+                    null  // endTime
+            ));
+    }
+
+    // 🔹 Step 4: Combine External (PMS) and Internal project-task data
+    List<ProjectTaskView> combinedList = new ArrayList<>(projectMap.values());
+    combinedList.addAll(internalMap.values());
+
+    return combinedList;
+    }
+
+
+
     public List<ProjectTaskView> getUserTaskViewM() {
     String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
 
