@@ -121,17 +121,31 @@ public class ManagerSummaryController {
                 })
                 .count();
 
-        // 📆 Weekly summary (Mon–Sat)
-        Map<String, BigDecimal> weeklySummary = new LinkedHashMap<>();
-        for (DayOfWeek day : DayOfWeek.values()) {
-            if (day == DayOfWeek.SUNDAY) continue; // skip Sunday
-            BigDecimal dayTotal = teamSheets.stream()
-                    .filter(ts -> ts.getWorkDate().getDayOfWeek() == day)
-                    .flatMap(ts -> ts.getEntries().stream())
-                    .map(this::calculateHours)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            weeklySummary.put(day.name(), dayTotal);
-        }
+        // 🧮 Fix weekly summary accumulation
+    Map<String, BigDecimal> weeklySummary = new LinkedHashMap<>();
+
+    for (DayOfWeek day : DayOfWeek.values()) {
+        if (day == DayOfWeek.SUNDAY) continue; // skip Sunday
+
+    long totalMinutes = teamSheets.stream()
+            .filter(ts -> ts.getWorkDate().getDayOfWeek() == day)
+            .flatMap(ts -> ts.getEntries().stream())
+            .mapToLong(e -> {
+                if (e.getFromTime() != null && e.getToTime() != null) {
+                    return Duration.between(e.getFromTime(), e.getToTime()).toMinutes();
+                }
+                return 0L;
+            })
+            .sum();
+
+    // ✅ Convert to proper HH.mm
+    long hours = totalMinutes / 60;
+    long minutes = totalMinutes % 60;
+    String formatted = String.format("%d.%02d", hours, minutes);
+
+    weeklySummary.put(day.name(), new BigDecimal(formatted));
+    }
+
 
         // 🧾 Final Response
         Map<String, Object> result = new LinkedHashMap<>();
@@ -163,11 +177,18 @@ public class ManagerSummaryController {
 
     // ⏱️ Duration calculation helper
     private BigDecimal calculateHours(TimeSheetEntry entry) {
-        if (entry == null || entry.getFromTime() == null || entry.getToTime() == null) {
-            return BigDecimal.ZERO;
-        }
-        Duration duration = Duration.between(entry.getFromTime(), entry.getToTime());
-        long minutes = duration.toMinutes();
-        return BigDecimal.valueOf(minutes).divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+    if (entry == null || entry.getFromTime() == null || entry.getToTime() == null) {
+        return BigDecimal.ZERO;
     }
+
+    Duration duration = Duration.between(entry.getFromTime(), entry.getToTime());
+    long totalMinutes = duration.toMinutes();
+    long hours = totalMinutes / 60;
+    long minutes = totalMinutes % 60;
+
+    // ✅ Correctly represent as HH.mm (not 5.70 but 6.10)
+    String formatted = String.format("%d.%02d", hours, minutes);
+    return new BigDecimal(formatted);
+    }
+
         }
