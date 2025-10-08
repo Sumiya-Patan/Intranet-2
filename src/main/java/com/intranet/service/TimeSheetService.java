@@ -392,7 +392,7 @@ public class TimeSheetService {
         return ResponseEntity.badRequest().body("Cannot add entries to an approved timesheet");
     }
 
-    List<TimeSheetEntry> existingEntries = timeSheet.getEntries();
+    
 
     for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
         if (dto.getFromTime() == null || dto.getToTime() == null || dto.getToTime().isBefore(dto.getFromTime())) {
@@ -644,6 +644,20 @@ public class TimeSheetService {
                 })
                 .toList();
     }
+    private BigDecimal calculateProductivityScore(BigDecimal totalHours,
+                                              double billablePercent,
+                                              long tasksWorked,
+                                              long projectsWorked) {
+    // Normalize each factor
+    double hoursScore = Math.min(totalHours.doubleValue() / 8.0, 1.0) * 100; // max 8h/day
+    double taskScore = Math.min(tasksWorked / 5.0, 1.0) * 100;                // max 5 tasks/day
+    double projectScore = Math.min(projectsWorked / 3.0, 1.0) * 100;          // max 3 projects/day
+
+    // Composite score: average of hours, billable %, tasks, projects
+    double productivity = (hoursScore + billablePercent + taskScore + projectScore) / 4.0;
+
+    return BigDecimal.valueOf(productivity).setScale(2, RoundingMode.HALF_UP);
+    }
 
     public Map<String, Object> getSummary(Long userId, LocalDate startDate, LocalDate endDate) {
 
@@ -745,15 +759,100 @@ public class TimeSheetService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     totalHours = formatHours(totalHours);
 
-    // ✅ 8. Final Response
-    return Map.of(
-            "timesheetSummary", timesheetSummary,
-            "billableActivity", billableActivity,
-            "projectSummary", projectSummary,
-            "weeklySummary", weeklySummary,
-            "totalHours", totalHours,
-            "dateRange", Map.of("startDate", startDate, "endDate", endDate)
-    );
+    Map<String, Map<String, Object>> productivityDetails = new LinkedHashMap<>();
+    for (DayOfWeek day : DayOfWeek.values()) {
+    if (day == DayOfWeek.SUNDAY) continue; // skip Sunday
+
+    List<TimeSheetEntry> dailyEntries = entries.stream()
+            .filter(e -> e.getTimeSheet().getWorkDate().getDayOfWeek() == day)
+            .toList();
+
+    BigDecimal dailyTotalHours = dailyEntries.stream()
+            .map(this::calculateHours)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    dailyTotalHours = formatHours(dailyTotalHours);
+
+    BigDecimal billableHours = dailyEntries.stream()
+            .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
+            .map(this::calculateHours)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    double billablePercent = 0.0;
+    if (dailyTotalHours.compareTo(BigDecimal.ZERO) > 0) {
+        billablePercent = billableHours.divide(dailyTotalHours, 2, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100)).doubleValue();
+    }
+
+    long tasksWorked = dailyEntries.stream()
+            .map(TimeSheetEntry::getTaskId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .count();
+
+    long projectsWorked = dailyEntries.stream()
+            .map(TimeSheetEntry::getProjectId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .count();
+
+    BigDecimal productivityScore = calculateProductivityScore(dailyTotalHours, billablePercent, tasksWorked, projectsWorked);
+
+    productivityDetails.put(day.name().toLowerCase(), Map.of(
+            "totalHours", dailyTotalHours,
+            "billablePercentage", billablePercent,
+            "tasksWorked", tasksWorked,
+            "projectsWorked", projectsWorked,
+            "productivityScore", productivityScore
+    ));
+    }
+
+
+    // --- After calculating totalHours (already in HH.mm format) ---
+
+        // 1️⃣ Total distinct tasks submitted in the date range
+        long totalTasks = entries.stream()
+                .map(TimeSheetEntry::getTaskId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+
+        // 2️⃣ Total number of days timesheet submitted
+        long totalDays = sheets.stream()
+                .map(TimeSheet::getWorkDate)
+                .distinct()
+                .count();
+
+        // 3️⃣ Average hours per day
+        BigDecimal averageHoursPerDay = totalDays > 0
+                ? totalHours.divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        // 4️⃣ Overall billable percentage
+        BigDecimal totalBillableHours = entries.stream()
+                .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
+                .map(this::calculateHours)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        double overallBillablePercentage = totalHours.compareTo(BigDecimal.ZERO) > 0
+            ? totalBillableHours.divide(totalHours, 2, RoundingMode.HALF_UP)
+            .multiply(BigDecimal.valueOf(100))
+            .doubleValue()
+            : 0.0;
+
+        // --- Add to final response ---
+        return Map.of(
+                "timesheetSummary", timesheetSummary,
+                "billableActivity", billableActivity,
+                "projectSummary", projectSummary,
+                "weeklySummary", weeklySummary,
+                "totalHours", totalHours,
+                "totalTasks", totalTasks,
+                "averageHoursPerDay", averageHoursPerDay,
+                "billablePercentage", overallBillablePercentage,
+                "dateRange", Map.of("startDate", startDate, "endDate", endDate),
+                "productivityDetails", productivityDetails
+            );
+
     }
 
 
