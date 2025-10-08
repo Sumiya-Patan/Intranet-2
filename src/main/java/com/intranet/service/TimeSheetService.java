@@ -18,7 +18,6 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -191,21 +190,22 @@ public class TimeSheetService {
             }
         }
 
-        // Step 6: Add supervisor from Resource Management (mocked)
-        Long supervisorId = 999L; // mock ID
-        String supervisorName = "Supervisor Mock"; // mock name
+        // // Step 6: Add supervisor from Resource Management (mocked)
+        // Long supervisorId = 999L; // mock ID
+        // String supervisorName = "Supervisor Mock"; // mock name
 
-        boolean supervisorExists = actionStatusList.stream()
-                .anyMatch(a -> a.getApproverId().equals(supervisorId));
+        // boolean supervisorExists = actionStatusList.stream()
+        //         .anyMatch(a -> a.getApproverId().equals(supervisorId));
 
-        if (!supervisorExists) {
-            actionStatusList.add(new ActionStatusDTO(supervisorId, supervisorName, "Pending"));
-        }
+        // if (!supervisorExists) {
+        //     actionStatusList.add(new ActionStatusDTO(supervisorId, supervisorName, "Pending"));
+        // }
 
         // Step 5: Compute overall timesheet status based on actionStatus
     if (actionStatusList.isEmpty()) {
         dto.setStatus("Pending");
-        dto.setActionStatus(null);
+        // dto.setActionStatus(null);
+        actionStatusList.add(new ActionStatusDTO(01L, "Supervisor Mock", "Pending"));
     } else {
         boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
         boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
