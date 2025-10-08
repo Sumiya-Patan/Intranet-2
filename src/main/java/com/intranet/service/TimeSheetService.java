@@ -106,11 +106,10 @@ public class TimeSheetService {
     }
     
     public List<TimeSheetResponseDTO> getUserTimeSheetHistory(Long userId) {
-    // Step 1: Fetch all timesheets of the user
     List<TimeSheet> timesheets = timeSheetRepository.findByUserIdOrderByWorkDateDesc(userId);
     if (timesheets.isEmpty()) return Collections.emptyList();
 
-    // Step 2: Fetch internal projects
+    // ✅ Step 1: Fetch internal projects
     List<InternalProject> internalProjects = internalProjectRepository.findAll();
     Map<Long, Map<String, Object>> combinedProjectMap = new HashMap<>();
 
@@ -121,7 +120,7 @@ public class TimeSheetService {
         combinedProjectMap.put(ip.getProjectId().longValue(), internalMap);
     }
 
-    // Step 2: Fetch all projects from PMS API
+    // ✅ Step 2: Fetch PMS projects
     String projectsUrl = String.format("%s/projects", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
             projectsUrl,
@@ -131,23 +130,21 @@ public class TimeSheetService {
     );
     List<Map<String, Object>> projects = projectResponse.getBody();
 
-    
     if (projects != null) {
         for (Map<String, Object> p : projects) {
             Long projectId = ((Number) p.get("id")).longValue();
-            // Only add PMS project if not already in internal projects
             combinedProjectMap.putIfAbsent(projectId, p);
         }
     }
 
-    // Step 3: Map timesheets to DTOs
+    // ✅ Step 3: Map timesheets → DTOs
     return timesheets.stream().map(ts -> {
         TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
         dto.setTimesheetId(ts.getTimesheetId());
         dto.setUserId(ts.getUserId());
         dto.setWorkDate(ts.getWorkDate());
 
-        // Map timesheet entries
+        // ✅ Map entries
         List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
             TimeSheetEntryResponseDTO entryDto = new TimeSheetEntryResponseDTO();
             entryDto.setTimesheetEntryId(entry.getTimesheetEntryId());
@@ -155,7 +152,6 @@ public class TimeSheetService {
             entryDto.setTaskId(entry.getTaskId());
             entryDto.setDescription(entry.getDescription());
             entryDto.setWorkType(entry.getWorkType());
-            // entryDto.setWorkLocation(entry.getWorkLocation());
             entryDto.setIsBillable(entry.getIsBillable());
             entryDto.setFromTime(entry.getFromTime());
             entryDto.setToTime(entry.getToTime());
@@ -165,7 +161,7 @@ public class TimeSheetService {
         }).toList();
         dto.setEntries(entries);
 
-        // Step 4: Build actionStatus list
+        // ✅ Step 4: Build actionStatus list (manager or mock)
         List<ActionStatusDTO> actionStatusList = new ArrayList<>();
         for (TimeSheetEntry entry : ts.getEntries()) {
             Map<String, Object> project = combinedProjectMap.get(entry.getProjectId());
@@ -183,60 +179,43 @@ public class TimeSheetService {
 
             String action = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
 
-            // Avoid duplicate entries
-            boolean exists = actionStatusList.stream().anyMatch(a -> a.getApproverId().equals(managerId));
+            boolean exists = actionStatusList.stream()
+                    .anyMatch(a -> a.getApproverId().equals(managerId));
             if (!exists) {
                 actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
             }
         }
 
-        // // Step 6: Add supervisor from Resource Management (mocked)
-        // Long supervisorId = 999L; // mock ID
-        // String supervisorName = "Supervisor Mock"; // mock name
-
-        // boolean supervisorExists = actionStatusList.stream()
-        //         .anyMatch(a -> a.getApproverId().equals(supervisorId));
-
-        // if (!supervisorExists) {
-        //     actionStatusList.add(new ActionStatusDTO(supervisorId, supervisorName, "Pending"));
-        // }
-
-        // Step 5: Compute overall timesheet status based on actionStatus
-    if (actionStatusList.isEmpty()) {
-        dto.setStatus("Pending");
-        // dto.setActionStatus(null);
-        actionStatusList.add(new ActionStatusDTO(01L, "Supervisor Mock", "Pending"));
-    } else {
-        boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
-        boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-        boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-        boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
-
-        if (anyRejected) {
-            dto.setStatus("Rejected");
-        } else if (allApproved) {
-            dto.setStatus("Approved");
-        } else if (anyApproved) {
-            dto.setStatus("Partially Approved");
-        } else if (allPending) {
+        // ✅ Step 5: Add mock supervisor if no approvers
+        if (actionStatusList.isEmpty()) {
+            actionStatusList.add(new ActionStatusDTO(1L, "Supervisor Mock", "Pending"));
             dto.setStatus("Pending");
         } else {
-            dto.setStatus("Pending"); // fallback
-    }
-    dto.setActionStatus(actionStatusList);
-    }
+            boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
+            boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+            boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
+            boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
+
+            if (anyRejected) dto.setStatus("Rejected");
+            else if (allApproved) dto.setStatus("Approved");
+            else if (anyApproved) dto.setStatus("Partially Approved");
+            else if (allPending) dto.setStatus("Pending");
+            else dto.setStatus("Pending");
+        }
+
+        dto.setActionStatus(actionStatusList);
         return dto;
     }).toList();
     }
 
+
     public List<TimeSheetResponseDTO> getUserTimeSheetHistoryByDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
-    // Step 1: Fetch all timesheets of the user within date range
     List<TimeSheet> timesheets = timeSheetRepository
             .findByUserIdAndWorkDateBetweenOrderByWorkDateDesc(userId, startDate, endDate);
 
     if (timesheets.isEmpty()) return Collections.emptyList();
 
-    // Step 2: Fetch all projects from PMS API
+    // ✅ Fetch projects
     String projectsUrl = String.format("%s/projects", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
             projectsUrl,
@@ -253,14 +232,13 @@ public class TimeSheetService {
             ))
             : new HashMap<>();
 
-    // Step 3: Map timesheets to DTOs (same as your existing method)
     return timesheets.stream().map(ts -> {
         TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
         dto.setTimesheetId(ts.getTimesheetId());
         dto.setUserId(ts.getUserId());
         dto.setWorkDate(ts.getWorkDate());
 
-        // Map timesheet entries
+        // ✅ Map entries
         List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
             TimeSheetEntryResponseDTO entryDto = new TimeSheetEntryResponseDTO();
             entryDto.setTimesheetEntryId(entry.getTimesheetEntryId());
@@ -268,7 +246,6 @@ public class TimeSheetService {
             entryDto.setTaskId(entry.getTaskId());
             entryDto.setDescription(entry.getDescription());
             entryDto.setWorkType(entry.getWorkType());
-            // entryDto.setWorkLocation(entry.getWorkLocation());
             entryDto.setIsBillable(entry.getIsBillable());
             entryDto.setFromTime(entry.getFromTime());
             entryDto.setToTime(entry.getToTime());
@@ -278,7 +255,7 @@ public class TimeSheetService {
         }).toList();
         dto.setEntries(entries);
 
-        // Step 4: Build actionStatus list
+        // ✅ Build action status
         List<ActionStatusDTO> actionStatusList = new ArrayList<>();
         for (TimeSheetEntry entry : ts.getEntries()) {
             Map<String, Object> project = projectMap.get(entry.getProjectId());
@@ -296,40 +273,35 @@ public class TimeSheetService {
 
             String action = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
 
-            // Avoid duplicate approvers
-            boolean exists = actionStatusList.stream().anyMatch(a -> a.getApproverId().equals(managerId));
+            boolean exists = actionStatusList.stream()
+                    .anyMatch(a -> a.getApproverId().equals(managerId));
             if (!exists) {
                 actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
             }
         }
 
-        // Step 5: Compute overall timesheet status
+        // ✅ Add mock supervisor if empty
         if (actionStatusList.isEmpty()) {
+            actionStatusList.add(new ActionStatusDTO(1L, "Supervisor Mock", "Pending"));
             dto.setStatus("Pending");
-            dto.setActionStatus(null);
         } else {
             boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
             boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
             boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
             boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
 
-            if (anyRejected) {
-                dto.setStatus("Rejected");
-            } else if (allApproved) {
-                dto.setStatus("Approved");
-            } else if (anyApproved) {
-                dto.setStatus("Partially Approved");
-            } else if (allPending) {
-                dto.setStatus("Pending");
-            } else {
-                dto.setStatus("Pending"); // fallback
-            }
-            dto.setActionStatus(actionStatusList);
+            if (anyRejected) dto.setStatus("Rejected");
+            else if (allApproved) dto.setStatus("Approved");
+            else if (anyApproved) dto.setStatus("Partially Approved");
+            else if (allPending) dto.setStatus("Pending");
+            else dto.setStatus("Pending");
         }
 
+        dto.setActionStatus(actionStatusList);
         return dto;
     }).toList();
     }
+
 
     @Transactional
     public void partialUpdateTimesheet(Long timesheetId, TimeSheetUpdateRequestDTO dto) {
@@ -427,13 +399,13 @@ public class TimeSheetService {
             return ResponseEntity.badRequest().body("Invalid fromTime/toTime for entry");
         }
 
-        // Check overlap with existing entries
-        boolean overlapsExisting = existingEntries.stream().anyMatch(e ->
-            timesOverlap(e.getFromTime(), e.getToTime(), dto.getFromTime(), dto.getToTime())
-        );
-        if (overlapsExisting) {
-            return ResponseEntity.badRequest().body("New entry overlaps with an existing entry");
-        }
+        // // Check overlap with existing entries
+        // boolean overlapsExisting = existingEntries.stream().anyMatch(e ->
+        //     timesOverlap(e.getFromTime(), e.getToTime(), dto.getFromTime(), dto.getToTime())
+        // );
+        // if (overlapsExisting) {
+        //     return ResponseEntity.badRequest().body("New entry overlaps with an existing entry");
+        // }
 
         // Check overlap with other new entries in batch
         boolean overlapsNewEntries = newEntries.stream()
@@ -673,109 +645,140 @@ public class TimeSheetService {
                 .toList();
     }
 
-     public Map<String, Object> getSummary(Long userId, LocalDate startDate, LocalDate endDate) {
-        HttpEntity<Void> entity = buildEntityWithAuth();
-        // ✅ 1. Fetch projects from PMS
-        String url = pmsBaseUrl + "/projects";
-        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                new ParameterizedTypeReference<>() {}
-        );
+    public Map<String, Object> getSummary(Long userId, LocalDate startDate, LocalDate endDate) {
 
-        Map<Long, String> projectMap = response.getBody().stream()
-                .collect(Collectors.toMap(
-                        p -> ((Number) p.get("id")).longValue(),
-                        p -> (String) p.get("name")
-                ));
+    // ✅ 0. Default date logic
+    LocalDate today = LocalDate.now();
+    if (startDate == null) {
+        startDate = today.withDayOfMonth(1); // First day of current month
+    }
+    if (endDate == null) {
+        endDate = today; // Current day
+    }
 
-        // ✅ 2. Fetch timesheets for user in range
-        List<TimeSheet> sheets = timeSheetRepository
-                .findByUserIdAndWorkDateBetween(userId, startDate, endDate);
+    HttpEntity<Void> entity = buildEntityWithAuth();
 
-        // Flatten entries
-        List<TimeSheetEntry> entries = sheets.stream()
-                .flatMap(s -> s.getEntries().stream())
-                .toList();
+    // ✅ 1. Fetch projects from PMS
+    String url = pmsBaseUrl + "/projects";
+    ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+            url,
+            HttpMethod.GET,
+            entity,
+            new ParameterizedTypeReference<>() {}
+    );
 
-        // ✅ 3. Timesheet Summary
-        Map<String, Long> timesheetSummary = Map.of(
-                "pending", sheets.stream().filter(s -> "Pending".equalsIgnoreCase(s.getStatus())).count(),
-                "approved", sheets.stream().filter(s -> "Approved".equalsIgnoreCase(s.getStatus())).count(),
-                "rejected", sheets.stream().filter(s -> "Rejected".equalsIgnoreCase(s.getStatus())).count()
-        );
-
-        // ✅ 4. Billable Activity
-        long billableLogs = entries.stream().filter(e -> Boolean.TRUE.equals(e.getIsBillable())).count();
-        long nonBillableLogs = entries.size() - billableLogs;
-        Map<String, Long> billableActivity = Map.of(
-                "billableLogs", billableLogs,
-                "nonBillableLogs", nonBillableLogs
-        );
-
-        // ✅ 5. Project Summary
-        Map<Long, BigDecimal> projectHours = entries.stream()
-                .collect(Collectors.groupingBy(
-                        TimeSheetEntry::getProjectId,
-                        Collectors.reducing(
-                                BigDecimal.ZERO,
-                                this::calculateHours,
-                                BigDecimal::add
-                        )
-                ));
-
-        List<Map<String, Object>> projectSummary = projectHours.entrySet().stream()
-            .map(e -> {
-        Map<String, Object> map = new HashMap<>();
-        map.put("projectId", e.getKey());
-        map.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
-        map.put("totalHoursWorked", e.getValue());
-        return map;
-        })
-        .collect(Collectors.toList());
-
-
-        // ✅ 6. Weekly Summary (group by day of week with 2 decimal rounding)
-        Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
+    Map<Long, String> projectMap = Optional.ofNullable(response.getBody())
+            .orElse(Collections.emptyList())
+            .stream()
             .collect(Collectors.toMap(
-                    d -> d.name().toLowerCase(), // monday, tuesday...
+                    p -> ((Number) p.get("id")).longValue(),
+                    p -> (String) p.get("name")
+            ));
+
+    // ✅ 2. Fetch timesheets for user in range
+    List<TimeSheet> sheets = timeSheetRepository.findByUserIdAndWorkDateBetween(userId, startDate, endDate);
+
+    // Flatten entries
+    List<TimeSheetEntry> entries = sheets.stream()
+            .flatMap(s -> s.getEntries().stream())
+            .toList();
+
+    // ✅ 3. Timesheet Summary
+    Map<String, Long> timesheetSummary = Map.of(
+            "pending", sheets.stream().filter(s -> "Pending".equalsIgnoreCase(s.getStatus())).count(),
+            "approved", sheets.stream().filter(s -> "Approved".equalsIgnoreCase(s.getStatus())).count(),
+            "rejected", sheets.stream().filter(s -> "Rejected".equalsIgnoreCase(s.getStatus())).count()
+    );
+
+    // ✅ 4. Billable Activity
+    long billableLogs = entries.stream().filter(e -> Boolean.TRUE.equals(e.getIsBillable())).count();
+    long nonBillableLogs = entries.size() - billableLogs;
+    Map<String, Long> billableActivity = Map.of(
+            "billableLogs", billableLogs,
+            "nonBillableLogs", nonBillableLogs
+    );
+
+    // ✅ 5. Project Summary (using true HH.mm formatting)
+    Map<Long, BigDecimal> projectHours = entries.stream()
+            .collect(Collectors.groupingBy(
+                    TimeSheetEntry::getProjectId,
+                    Collectors.reducing(
+                            BigDecimal.ZERO,
+                            this::calculateHours,
+                            BigDecimal::add
+                    )
+            ));
+
+    List<Map<String, Object>> projectSummary = projectHours.entrySet().stream()
+            .map(e -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("projectId", e.getKey());
+                map.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
+                map.put("totalHoursWorked", formatHours(e.getValue())); // fixed
+                return map;
+            })
+            .collect(Collectors.toList());
+
+    // ✅ 6. Weekly Summary
+    Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
+            .collect(Collectors.toMap(
+                    d -> d.name().toLowerCase(),
                     d -> BigDecimal.ZERO,
                     (a, b) -> a,
                     LinkedHashMap::new
             ));
 
-            entries.forEach(entry -> {
-            LocalDate workDate = entry.getTimeSheet().getWorkDate();
-            DayOfWeek day = workDate.getDayOfWeek();
-            BigDecimal hours = calculateHours(entry); // Your method to get hours for the entry
+    entries.forEach(entry -> {
+        LocalDate workDate = entry.getTimeSheet().getWorkDate();
+        DayOfWeek day = workDate.getDayOfWeek();
+        BigDecimal hours = calculateHours(entry);
 
-            // Merge and round to 2 decimals
-            weeklySummary.merge(
-                    day.name().toLowerCase(),
-                    hours.setScale(2, RoundingMode.HALF_UP),
-                    (oldVal, newVal) -> oldVal.add(newVal).setScale(2, RoundingMode.HALF_UP)
-            );
-            });
+        weeklySummary.merge(day.name().toLowerCase(), hours, BigDecimal::add);
+    });
 
+    // ✅ Round weekly hours & format to 2 decimals
+    weeklySummary.replaceAll((k, v) -> formatHours(v));
 
-        // ✅ 7. Final Response
-        return Map.of(
-                "timesheetSummary", timesheetSummary,
-                "billableActivity", billableActivity,
-                "projectSummary", projectSummary,
-                "weeklySummary", weeklySummary
-        );
+    // ✅ 7. Calculate total hours worked for range
+    BigDecimal totalHours = entries.stream()
+            .map(this::calculateHours)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    totalHours = formatHours(totalHours);
+
+    // ✅ 8. Final Response
+    return Map.of(
+            "timesheetSummary", timesheetSummary,
+            "billableActivity", billableActivity,
+            "projectSummary", projectSummary,
+            "weeklySummary", weeklySummary,
+            "totalHours", totalHours,
+            "dateRange", Map.of("startDate", startDate, "endDate", endDate)
+    );
     }
 
+
     private BigDecimal calculateHours(TimeSheetEntry entry) {
-        if (entry.getFromTime() != null && entry.getToTime() != null) {
-            long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
-            return BigDecimal.valueOf(minutes / 60.0);
-        } else if (entry.getHoursWorked() != null) {
-            return entry.getHoursWorked();
-        }
-        return BigDecimal.ZERO;
+    if (entry.getFromTime() != null && entry.getToTime() != null) {
+        long totalMinutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
+        long hoursPart = totalMinutes / 60;
+        long minutesPart = totalMinutes % 60;
+
+        // Convert 5h 40m → 5.40 (HH.mm format for readability)
+        String formatted = String.format("%d.%02d", hoursPart, minutesPart);
+        return new BigDecimal(formatted);
+    } else if (entry.getHoursWorked() != null) {
+        return entry.getHoursWorked();
+    }
+    return BigDecimal.ZERO;
+    }
+
+    private BigDecimal formatHours(BigDecimal hoursDecimal) {
+    // Convert to minutes total
+    long totalMinutes = hoursDecimal.multiply(BigDecimal.valueOf(60)).longValue();
+    long hours = totalMinutes / 60;
+    long minutes = totalMinutes % 60;
+
+    return new BigDecimal(String.format("%d.%02d", hours, minutes));
     }
 
 }
