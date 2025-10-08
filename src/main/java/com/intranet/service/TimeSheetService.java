@@ -822,10 +822,18 @@ public class TimeSheetService {
                 .distinct()
                 .count();
 
-        // 3️⃣ Average hours per day
-        BigDecimal averageHoursPerDay = totalDays > 0
-                ? totalHours.divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+       // 3️⃣ Average hours per day (HH:mm accurate)
+        String averageHoursPerDay = "00:00";
+        if (totalDays > 0 && totalHours.compareTo(BigDecimal.ZERO) > 0) {
+            // Convert totalHours (e.g., 70.30) → total minutes
+            long totalMinutes = totalHoursToMinutes(totalHours);
+            long avgMinutes = totalMinutes / totalDays;
+            long avgHoursPart = avgMinutes / 60;
+            long avgMinutesPart = avgMinutes % 60;
+
+            averageHoursPerDay = String.format("%02d:%02d", avgHoursPart, avgMinutesPart);
+        }
+
 
         // 4️⃣ Overall billable percentage
         BigDecimal totalBillableHours = entries.stream()
@@ -878,6 +886,20 @@ public class TimeSheetService {
     long minutes = totalMinutes % 60;
 
     return new BigDecimal(String.format("%d.%02d", hours, minutes));
+    }
+
+    private long totalHoursToMinutes(BigDecimal hoursDecimal) {
+    // Example: 12.30 means 12 hours and 30 minutes, not 12.3
+    String[] parts = hoursDecimal.toPlainString().split("\\.");
+    long hours = Long.parseLong(parts[0]);
+    long minutes = 0;
+    if (parts.length > 1) {
+        String minutePart = parts[1];
+        if (minutePart.length() == 1) minutePart += "0"; // handle 12.3 -> 12.30
+        minutes = Long.parseLong(minutePart);
+        if (minutes > 59) minutes = 59; // safety cap
+    }
+    return (hours * 60) + minutes;
     }
 
 }
