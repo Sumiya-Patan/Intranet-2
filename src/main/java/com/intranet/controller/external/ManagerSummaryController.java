@@ -165,9 +165,11 @@ public class ManagerSummaryController {
     }
 
 
+    // 📅 Change to check yesterday
+    LocalDate yesterday = today.minusDays(1);
     // Identify users who have NOT submitted today
     Set<Long> submittedToday = teamSheets.stream()
-            .filter(ts -> ts.getWorkDate().isEqual(today))
+            .filter(ts -> ts.getWorkDate().isEqual(yesterday))
             .map(TimeSheet::getUserId)
             .collect(Collectors.toSet());
 
