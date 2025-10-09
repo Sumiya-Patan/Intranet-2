@@ -3,7 +3,6 @@ package com.intranet.controller;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -178,7 +177,7 @@ public class TimeSheetController {
     // ✅ 7. Minimum hours validation (8 hours)
     if (totalMinutes < 8 * 60) { // 8 hours = 480 minutes
         return ResponseEntity.badRequest()
-                .body("⚠️ Total working hours must be at least 8:00 hours.");
+                .body("⚠️ Total working hours must be at least 8:00 hours. Currently: " + totalHours);
     }
 
     // ✅ 8. Save timesheet
