@@ -34,6 +34,9 @@ public class ManagerSummaryController {
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
 
+    @Value("${ums.api.base-url}")
+    private String umsBaseUrl;
+
     @Autowired
     private TimeSheetRepo timeSheetRepository;
 
@@ -42,122 +45,160 @@ public class ManagerSummaryController {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Operation(summary = "Get summary of timesheets for a manager's team within a date range (includes weekly breakdown)")
+    @Operation(summary = "Get summary of timesheets for a manager's team within a date range (includes weekly breakdown and pending users today)")
     @GetMapping("/manager/summary")
     @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<Map<String, Object>> getTeamSummary(
-            @CurrentUser UserDTO user,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            HttpServletRequest request) {
+        @CurrentUser UserDTO user,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+        HttpServletRequest request) {
 
-        LocalDate today = LocalDate.now();
-        if (startDate == null) startDate = today.withDayOfMonth(1);
-        if (endDate == null) endDate = today;
+    LocalDate today = LocalDate.now();
+    if (startDate == null) startDate = today.withDayOfMonth(1);
+    if (endDate == null) endDate = today;
 
-        // 🔐 Forward Authorization header
-        String authHeader = request.getHeader("Authorization");
-        HttpHeaders headers = new HttpHeaders();
-        if (authHeader != null && !authHeader.isBlank()) headers.set("Authorization", authHeader);
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
+    // Forward Authorization header
+    String authHeader = request.getHeader("Authorization");
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) headers.set("Authorization", authHeader);
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        // 🔗 Fetch manager’s projects
-        String url = String.format("%s/projects/owner", pmsBaseUrl);
-        ResponseEntity<List<Map<String, Object>>> response =
-                restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-        List<Map<String, Object>> projects = response.getBody();
+    // Fetch manager’s projects
+    String url = String.format("%s/projects/owner", pmsBaseUrl);
+    ResponseEntity<List<Map<String, Object>>> response =
+            restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+    List<Map<String, Object>> projects = response.getBody();
 
-        if (projects == null || projects.isEmpty()) {
-            return ResponseEntity.ok(emptySummary(startDate, endDate));
-        }
+    if (projects == null || projects.isEmpty()) {
+        return ResponseEntity.ok(emptySummary(startDate, endDate));
+    }
 
-        // 👥 Collect team member IDs
-        Set<Long> memberIds = projects.stream()
-                .flatMap(p -> Optional.ofNullable((List<Map<String, Object>>) p.get("members"))
-                        .orElse(Collections.emptyList()).stream())
-                .map(m -> ((Number) m.get("id")).longValue())
-                .collect(Collectors.toSet());
+    // Collect team member IDs
+    Set<Long> memberIds = projects.stream()
+            .flatMap(p -> Optional.ofNullable((List<Map<String, Object>>) p.get("members"))
+                    .orElse(Collections.emptyList()).stream())
+            .map(m -> ((Number) m.get("id")).longValue())
+            .collect(Collectors.toSet());
 
-        if (memberIds.isEmpty()) {
-            return ResponseEntity.ok(emptySummary(startDate, endDate));
-        }
+    if (memberIds.isEmpty()) {
+        return ResponseEntity.ok(emptySummary(startDate, endDate));
+    }
 
-        // 🗓️ Fetch all timesheets in range
-        List<TimeSheet> teamSheets = timeSheetRepository
-                .findByUserIdInAndWorkDateBetween(memberIds, startDate, endDate);
+    // Fetch all timesheets in range
+    List<TimeSheet> teamSheets = timeSheetRepository
+            .findByUserIdInAndWorkDateBetween(memberIds, startDate, endDate);
 
-        if (teamSheets.isEmpty()) {
-            return ResponseEntity.ok(emptySummary(startDate, endDate));
-        }
-
-        // 🧮 Flatten all entries
-        List<TimeSheetEntry> allEntries = teamSheets.stream()
-                .flatMap(ts -> ts.getEntries().stream())
-                .toList();
-
-        // 📊 Total & Billable hours
-        BigDecimal totalHours = allEntries.stream()
-                .map(this::calculateHours)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal billableHours = allEntries.stream()
-                .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
-                .map(this::calculateHours)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        double billablePercentage = 0.0;
-        if (totalHours.compareTo(BigDecimal.ZERO) > 0) {
-            billablePercentage = billableHours
-                    .divide(totalHours, 2, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .doubleValue();
-        }
-
-        // ⏳ Count pending timesheets
-        long pendingCount = teamSheets.stream()
-                .filter(ts -> {
-                    Optional<TimeSheetReview> reviewOpt = reviewRepository.findByTimeSheetAndManagerId(ts, user.getId());
-                    return reviewOpt.isEmpty() || "Pending".equalsIgnoreCase(reviewOpt.get().getAction());
-                })
-                .count();
-
-        // 🧮 Fix weekly summary accumulation
-    Map<String, BigDecimal> weeklySummary = new LinkedHashMap<>();
-
-    for (DayOfWeek day : DayOfWeek.values()) {
-        if (day == DayOfWeek.SUNDAY) continue; // skip Sunday
-
-    long totalMinutes = teamSheets.stream()
-            .filter(ts -> ts.getWorkDate().getDayOfWeek() == day)
+    List<TimeSheetEntry> allEntries = teamSheets.stream()
             .flatMap(ts -> ts.getEntries().stream())
-            .mapToLong(e -> {
-                if (e.getFromTime() != null && e.getToTime() != null) {
-                    return Duration.between(e.getFromTime(), e.getToTime()).toMinutes();
-                }
-                return 0L;
+            .toList();
+
+    // Total & Billable hours
+    BigDecimal totalHours = allEntries.stream()
+            .map(this::calculateHours)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    BigDecimal billableHours = allEntries.stream()
+            .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
+            .map(this::calculateHours)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    double billablePercentage = 0.0;
+    if (totalHours.compareTo(BigDecimal.ZERO) > 0) {
+        billablePercentage = billableHours
+                .divide(totalHours, 2, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+    }
+
+    // Count pending timesheets (manager review pending)
+    long pendingCount = teamSheets.stream()
+            .filter(ts -> {
+                Optional<TimeSheetReview> reviewOpt = reviewRepository.findByTimeSheetAndManagerId(ts, user.getId());
+                return reviewOpt.isEmpty() || "Pending".equalsIgnoreCase(reviewOpt.get().getAction());
             })
-            .sum();
+            .count();
 
-    // ✅ Convert to proper HH.mm
-    long hours = totalMinutes / 60;
-    long minutes = totalMinutes % 60;
-    String formatted = String.format("%d.%02d", hours, minutes);
+    // Weekly summary
+    Map<String, BigDecimal> weeklySummary = new LinkedHashMap<>();
+    for (DayOfWeek day : DayOfWeek.values()) {
+        if (day == DayOfWeek.SUNDAY) continue;
 
-    weeklySummary.put(day.name(), new BigDecimal(formatted));
+        long totalMinutes = teamSheets.stream()
+                .filter(ts -> ts.getWorkDate().getDayOfWeek() == day)
+                .flatMap(ts -> ts.getEntries().stream())
+                .mapToLong(e -> {
+                    if (e.getFromTime() != null && e.getToTime() != null) {
+                        return Duration.between(e.getFromTime(), e.getToTime()).toMinutes();
+                    }
+                    return 0L;
+                })
+                .sum();
+
+        long hours = totalMinutes / 60;
+        long minutes = totalMinutes % 60;
+        String formatted = String.format("%d.%02d", hours, minutes);
+
+        weeklySummary.put(day.name(), new BigDecimal(formatted));
+    }
+
+    // Step 6: Build user cache by calling UMS
+    Map<Long, String> userCacheFullName = new HashMap<>();
+    Map<Long, String> userCacheEmail = new HashMap<>();
+    for (Long userId : memberIds) {  // Use memberIds so you have all team users
+    String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
+    try {
+        ResponseEntity<Map<String, Object>> userResponse =
+                restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+        Map<String, Object> userMap = userResponse.getBody();
+        if (userMap != null) {
+            String firstName = (String) userMap.get("first_name");
+            String lastName = (String) userMap.get("last_name");
+            String email = (String) userMap.get("mail");
+            userCacheFullName.put(userId, (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : ""));
+            userCacheEmail.put(userId, email != null ? email : "unknown@example.com");
+        }
+    } catch (Exception e) {
+        userCacheFullName.put(userId, "User not from UMS");
+        userCacheEmail.put(userId, "unknown@example.com");
+    }
     }
 
 
-        // 🧾 Final Response
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("totalHours", totalHours);
-        result.put("billableHours", billableHours);
-        result.put("billablePercentage", billablePercentage);
-        result.put("pending", pendingCount);
-        result.put("dateRange", Map.of("startDate", startDate, "endDate", endDate));
-        result.put("weeklySummary", weeklySummary);
+    // Identify users who have NOT submitted today
+    Set<Long> submittedToday = teamSheets.stream()
+            .filter(ts -> ts.getWorkDate().isEqual(today))
+            .map(TimeSheet::getUserId)
+            .collect(Collectors.toSet());
 
-        return ResponseEntity.ok(result);
+    List<Map<String, Object>> pendingTimesheets = memberIds.stream()
+        .filter(memberId -> !submittedToday.contains(memberId))
+        .map(memberId -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("userId", memberId);
+            map.put("fullName", userCacheFullName.getOrDefault(memberId, "Unknown"));
+            map.put("email", userCacheEmail.getOrDefault(memberId, "unknown@example.com"));
+            return map;
+        })
+        .collect(Collectors.toList());
+
+
+
+
+    // -----------------------------------------------------------------------
+
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("totalHours", totalHours);
+    result.put("billableHours", billableHours);
+    result.put("billablePercentage", billablePercentage);
+    result.put("pending", pendingCount);
+    result.put("dateRange", Map.of("startDate", startDate, "endDate", endDate));
+    result.put("weeklySummary", weeklySummary);
+    result.put("missingTimesheets", pendingTimesheets); // NEW addition
+
+    return ResponseEntity.ok(result);
     }
+
 
     // 🧩 Empty response helper
     private Map<String, Object> emptySummary(LocalDate startDate, LocalDate endDate) {
