@@ -869,10 +869,7 @@ public class TimeSheetService {
         long totalMinutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
         long hoursPart = totalMinutes / 60;
         long minutesPart = totalMinutes % 60;
-
-        // Convert 5h 40m → 5.40 (HH.mm format for readability)
-        String formatted = String.format("%d.%02d", hoursPart, minutesPart);
-        return new BigDecimal(formatted);
+        return new BigDecimal(String.format("%d.%02d", hoursPart, minutesPart));
     } else if (entry.getHoursWorked() != null) {
         return entry.getHoursWorked();
     }
@@ -880,26 +877,24 @@ public class TimeSheetService {
     }
 
     private BigDecimal formatHours(BigDecimal hoursDecimal) {
-    // Convert to minutes total
-    long totalMinutes = hoursDecimal.multiply(BigDecimal.valueOf(60)).longValue();
-    long hours = totalMinutes / 60;
-    long minutes = totalMinutes % 60;
-
-    return new BigDecimal(String.format("%d.%02d", hours, minutes));
+        long totalMinutes = totalHoursToMinutes(hoursDecimal);
+        long hours = totalMinutes / 60;
+        long minutes = totalMinutes % 60;
+        return new BigDecimal(String.format("%d.%02d", hours, minutes));
     }
 
     private long totalHoursToMinutes(BigDecimal hoursDecimal) {
-    // Example: 12.30 means 12 hours and 30 minutes, not 12.3
-    String[] parts = hoursDecimal.toPlainString().split("\\.");
-    long hours = Long.parseLong(parts[0]);
-    long minutes = 0;
-    if (parts.length > 1) {
-        String minutePart = parts[1];
-        if (minutePart.length() == 1) minutePart += "0"; // handle 12.3 -> 12.30
-        minutes = Long.parseLong(minutePart);
-        if (minutes > 59) minutes = 59; // safety cap
-    }
-    return (hours * 60) + minutes;
-    }
+        String[] parts = hoursDecimal.toPlainString().split("\\.");
+        long hours = Long.parseLong(parts[0]);
+        long minutes = 0;
+        if (parts.length > 1) {
+            String minutePart = parts[1];
+            if (minutePart.length() == 1) minutePart += "0";
+            minutes = Long.parseLong(minutePart);
+            if (minutes > 59) minutes = 59;
+        }
+        return (hours * 60) + minutes;
+        }
+
 
 }

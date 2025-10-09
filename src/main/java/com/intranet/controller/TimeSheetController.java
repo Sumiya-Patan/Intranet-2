@@ -4,8 +4,10 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -81,104 +83,118 @@ public class TimeSheetController {
     }
 
 
-   @Operation(summary = "Create a new timesheet")
+  @Operation(summary = "Create a new timesheet")
     // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
    @PostMapping("/create")
     public ResponseEntity<String> submitTimeSheet(
-            @RequestParam(value = "workDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
-            @RequestBody List<TimeSheetEntryDTO> entries,
-            @CurrentUser UserDTO user, HttpServletRequest request) {
-        // If no workDate is passed, use today's date
-        if (workDate == null) {
-            workDate = LocalDate.now();
+        @RequestParam(value = "workDate", required = false) 
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
+        @RequestBody List<TimeSheetEntryDTO> entries,
+        @CurrentUser UserDTO user,
+        HttpServletRequest request) {
+
+    // ✅ 1. Default date to today if not provided
+    if (workDate == null) {
+        workDate = LocalDate.now();
+    }
+
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // ✅ 2. Check if date is a public holiday via LMS API
+    String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
+    try {
+        ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
+                holidayUrl, HttpMethod.GET, entity,
+                new ParameterizedTypeReference<>() {}
+        );
+
+        Map<String, Object> holidayBody = holidayResponse.getBody();
+        if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
+            return ResponseEntity.badRequest()
+                    .body("Cannot submit timesheet on a public holiday: " + holidayBody.get("message"));
         }
+    } catch (Exception e) {
+        System.err.println("Holiday API check failed: " + e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("⚠️ Unable to verify public holiday status. Please try again later.");
+    }
 
-        HttpEntity<Void> entity = buildEntityWithAuth();
-         // 🔹 Step 1: Check if the date is a public holiday via LMS API
-        String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
-        try {
-            ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
-                    holidayUrl,
-                    HttpMethod.GET,
-                    entity,
-                    new ParameterizedTypeReference<>() {}
-            );
+    // ✅ 3. Check if timesheet already exists for this user & date
+    boolean exists = timeSheetRepository.existsByUserIdAndWorkDate(user.getId(), workDate);
+    if (exists) {
+        return ResponseEntity.badRequest()
+                .body("⚠️ Timesheet already submitted for " + workDate);
+    }
 
-            Map<String, Object> holidayBody = holidayResponse.getBody();
-            if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
+    // ✅ 4. Detect duplicate time slots within the same submission
+    Set<String> uniqueTimeSlots = new HashSet<>();
+    for (TimeSheetEntryDTO entry : entries) {
+        if (entry.getFromTime() != null && entry.getToTime() != null) {
+            String key = entry.getFromTime() + "-" + entry.getToTime();
+            if (!uniqueTimeSlots.add(key)) {
                 return ResponseEntity.badRequest()
-                        .body("Failed to submit timesheet on Public Holiday: "+holidayBody.get("message"));
+                        .body("Duplicate entry detected for time range: " + key);
             }
-        } catch (Exception e) {
-            // Optional: log the error but don't block timesheet submission if holiday API is down
-            System.err.println("Holiday API check failed: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body("Unable to verify public holiday status. Please try again later.");
-        }
-
-        // 2. Check if timesheet already exists for this user and date
-        boolean exists = timeSheetRepository.existsByUserIdAndWorkDate(user.getId(), workDate);
-        if (exists) {
-            return ResponseEntity.badRequest()
-                    .body("Timesheet already submitted for " + workDate);
-        }
-        
-        // Check for duplicates in the same request
-        Map<String, Integer> entryCountMap = new HashMap<>();
-        for (int i = 0; i < entries.size(); i++) {
-        TimeSheetEntryDTO entry = entries.get(i);
-
-        // String key = entry.getProjectId() + "-" + entry.getTaskId() + "-" 
-        //             + entry.getFromTime() + "-" + entry.getToTime();
-
-        String key = entry.getFromTime() + "-" + entry.getToTime();
-
-        entryCountMap.put(key, entryCountMap.getOrDefault(key, 0) + 1);
-        int count = entryCountMap.get(key);
-
-        if (count > 1) {
-            return ResponseEntity.badRequest()
-                    .body("Duplicate entry found");
-        }
-        }
-
-        BigDecimal totalHours = BigDecimal.ZERO;
-        for (TimeSheetEntryDTO entry : entries) {
-            if (entry.getFromTime() != null && entry.getToTime() != null) {
-                long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
-                long hoursPart = minutes / 60;
-                long minutesPart = minutes % 60;
-
-                // Convert to hours.minutes format, e.g., 5 hours 40 min => 5.40
-                BigDecimal hoursWorked = new BigDecimal(hoursPart + "." + String.format("%02d", minutesPart));
-                totalHours = totalHours.add(hoursWorked);
-
-                // Store in the entry
-                entry.setHoursWorked(hoursWorked);
-            } else if (entry.getHoursWorked() != null) {
-                totalHours = totalHours.add(entry.getHoursWorked());
-            }
-        }
-        
-        // Convert totalHours (HH.mm) to total minutes
-        String[] parts = totalHours.toPlainString().split("\\.");
-        long hours = Long.parseLong(parts[0]);
-        long minutes = parts.length > 1 ? Long.parseLong(parts[1]) : 0;
-        long totalMinutes = hours * 60 + minutes;
-
-        if (totalMinutes < 8 * 60) { // 8 hours = 480 minutes
-            return ResponseEntity.badRequest()
-                    .body("Total hours must be at least 8 hours.");
-        }
-
-        try {
-            timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
-            return ResponseEntity.ok("Timesheet submitted successfully.");
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body("Timesheet submission failed");
         }
     }
+
+    // ✅ 5. Calculate total minutes safely and convert to HH:mm
+    long totalMinutes = 0;
+
+    for (TimeSheetEntryDTO entry : entries) {
+        if (entry.getFromTime() != null && entry.getToTime() != null) {
+
+            // Ensure end time is after start time
+            if (!entry.getToTime().isAfter(entry.getFromTime())) {
+                return ResponseEntity.badRequest()
+                        .body("❌ Invalid time range: 'To Time' must be after 'From Time'.");
+            }
+
+            long minutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
+            totalMinutes += minutes;
+
+            // Store each entry's hours worked in HH.mm readable format (for display only)
+            long entryHours = minutes / 60;
+            long entryMins = minutes % 60;
+            BigDecimal hoursWorked = new BigDecimal(String.format("%d.%02d", entryHours, entryMins));
+            entry.setHoursWorked(hoursWorked);
+
+        } else if (entry.getHoursWorked() != null) {
+            // Convert from HH.mm → total minutes
+            String[] parts = entry.getHoursWorked().toPlainString().split("\\.");
+            long hrs = Long.parseLong(parts[0]);
+            long mins = (parts.length > 1) ? Long.parseLong(parts[1]) : 0;
+            if (mins >= 60) mins = 59; // safety correction
+            totalMinutes += hrs * 60 + mins;
+        }
+    }
+
+    // ✅ 6. Convert total minutes → HH.mm properly
+    long totalHoursPart = totalMinutes / 60;
+    long totalMinutesPart = totalMinutes % 60;
+    BigDecimal totalHours = new BigDecimal(String.format("%d.%02d", totalHoursPart, totalMinutesPart));
+
+    // ✅ 7. Minimum hours validation (8 hours)
+    if (totalMinutes < 8 * 60) { // 8 hours = 480 minutes
+        return ResponseEntity.badRequest()
+                .body("⚠️ Total working hours must be at least 8:00 hours.");
+    }
+
+    // ✅ 8. Save timesheet
+    try {
+        timeSheetService.createTimeSheetWithEntries(user.getId(), workDate, entries);
+        return ResponseEntity.ok("Timesheet submitted successfully");
+    } catch (IllegalArgumentException e) {
+        e.printStackTrace();
+        return ResponseEntity.badRequest().body("Timesheet submission failed due to invalid data.");
+    } catch (Exception e) {
+        e.printStackTrace();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("⚠️ An unexpected error occurred while submitting timesheet.");
+    }
+    }
+
 
     @Operation(summary = "Get user's timesheet history")
     // @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('GENERAL') or hasRole('HR')")
