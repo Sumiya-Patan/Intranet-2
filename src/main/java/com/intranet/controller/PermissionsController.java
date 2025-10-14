@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.Operation;
 @RestController
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RequestMapping("/api")
-public class Permissions {
+public class PermissionsController {
 
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET')  OR hasAuthority('APPROVE_TIMESHEET')")
     @Operation(summary = "Debug permissions of the authenticated user")
