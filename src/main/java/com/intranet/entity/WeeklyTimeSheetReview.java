@@ -1,0 +1,32 @@
+package com.intranet.entity;
+
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Table(name = "weekly_timesheet_review")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class WeeklyTimeSheetReview {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "week_info_id")
+    private WeekInfo weekInfo;
+
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    public enum Status {
+        DRAFT, SUBMITTED, APPROVED, PARTIALLY_REJECTED, REJECTED
+    }
+
+
+}
