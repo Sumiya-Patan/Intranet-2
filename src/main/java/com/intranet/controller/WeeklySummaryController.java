@@ -4,6 +4,8 @@ import com.intranet.dto.UserDTO;
 import com.intranet.dto.WeeklySummaryDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.WeeklySummaryService;
+
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +24,7 @@ public class WeeklySummaryController {
      * @return weekly summary DTO
      */
     @GetMapping("/weekly-summary")
+    @Operation(summary = "Get weekly summary of a user for the current month")
     public ResponseEntity<WeeklySummaryDTO> getWeeklySummary(@CurrentUser UserDTO user) {
         WeeklySummaryDTO summary = weeklySummaryService.getWeeklySummary(user.getId());
         return ResponseEntity.ok(summary);

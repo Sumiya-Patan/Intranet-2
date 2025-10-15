@@ -36,9 +36,10 @@ public class TimeSheetController {
         @RequestBody List<TimeSheetEntryCreateDTO> entries) {
     
     try {
-    String saved = timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
-    return ResponseEntity.ok(saved);}
-    catch(IllegalArgumentException e) {
+    timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
+    return ResponseEntity.ok().body("Timesheet Submitted Successful");
+    }
+    catch(Exception e) {
         return ResponseEntity.badRequest().body("Failed to create timesheet");
     }
 
