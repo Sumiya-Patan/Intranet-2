@@ -6,6 +6,7 @@ import lombok.Data;
 
 @Data
 public class TimeSheetEntrySummaryDTO {
+    private Long timesheetEntryid;
     private Long projectId;
     private Long taskId;
     private String description;
