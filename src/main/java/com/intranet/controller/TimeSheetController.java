@@ -11,6 +11,8 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import java.time.LocalDate;
 import java.util.List;
 
@@ -27,6 +29,7 @@ public class TimeSheetController {
     private TimeSheetService timeSheetService;
 
     @PostMapping("/create")
+    @Operation(summary = "Submit a new timesheet")
     public ResponseEntity<?> submitTimeSheet(
         @CurrentUser UserDTO currentUser,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
