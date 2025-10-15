@@ -78,6 +78,7 @@ public class WeeklySummaryService {
         tsDTO.setTimesheetId(ts.getId());
         tsDTO.setWorkDate(ts.getWorkDate());
         tsDTO.setHoursWorked(ts.getHoursWorked());
+        tsDTO.setStatus(ts.getStatus().name());
         tsDTO.setEntries(entries);
         return tsDTO;
     }
