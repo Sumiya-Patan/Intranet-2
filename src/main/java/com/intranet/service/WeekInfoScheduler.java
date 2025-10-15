@@ -18,7 +18,8 @@ public class WeekInfoScheduler {
      * Cron: run at 12:05 AM on the 1st day of each month
      * 0 5 0 1 * *  → (second=0, minute=5, hour=0, day=1, month=*, dayOfWeek=*)
      */
-    @Scheduled(cron = "0 5 0 1 * *")
+    // @Scheduled(cron = "0 5 0 1 * *")
+    @Scheduled(fixedRate = 10000)
     public void generateCurrentMonthWeeks() {
         LocalDate now = LocalDate.now();
         int year = now.getYear();
