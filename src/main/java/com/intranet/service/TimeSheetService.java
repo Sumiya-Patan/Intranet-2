@@ -71,18 +71,18 @@ public class TimeSheetService {
     }
 
     private BigDecimal calculateHours(LocalDateTime from, LocalDateTime to) {
-        if (from == null || to == null) return BigDecimal.ZERO;
-        if (to.isBefore(from)) throw new IllegalArgumentException("toTime cannot be before fromTime");
+    if (from == null || to == null) return BigDecimal.ZERO;
+    if (to.isBefore(from)) throw new IllegalArgumentException("toTime cannot be before fromTime");
 
-        Duration duration = Duration.between(from, to);
-        long hours = duration.toMinutes() / 60;
-        long minutes = duration.toMinutes() % 60;
+    Duration duration = Duration.between(from, to);
+    long hours = duration.toHours();
+    long minutes = duration.toMinutes() % 60;
 
-        BigDecimal decimalHours = BigDecimal.valueOf(hours);
-        BigDecimal decimalMinutes = BigDecimal.valueOf(minutes)
-                .divide(BigDecimal.valueOf(60), 2, BigDecimal.ROUND_HALF_UP);
-        return decimalHours.add(decimalMinutes);
+    // Format as HH.MM where minutes are two digits
+    String hhmm = String.format("%02d.%02d", hours, minutes);
+    return new BigDecimal(hhmm);
     }
+
 
     private WeekInfo findOrCreateWeekInfo(LocalDate workDate) {
         return weekInfoRepository.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(workDate, workDate)
