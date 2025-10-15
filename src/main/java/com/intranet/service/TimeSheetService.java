@@ -1,5 +1,6 @@
 package com.intranet.service;
 
+import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
@@ -16,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.WeekFields;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -103,4 +105,56 @@ public class TimeSheetService {
 
         return weekInfoRepository.save(weekInfo);
     }
+
+    public String addEntriesToTimeSheet(AddEntryDTO addEntryDTO) {
+        Long timesheetId = addEntryDTO.getTimeSheetId();
+
+        if (timesheetId == null) {
+            return "timeSheetId is required in the request body";
+        }
+
+        Optional<TimeSheet> optionalTimeSheet = timeSheetRepository.findById(timesheetId);
+
+        if (optionalTimeSheet.isEmpty()) {
+            return "No timesheet found with id: " + timesheetId;
+        }
+
+        TimeSheet timeSheet = optionalTimeSheet.get();
+
+        if (addEntryDTO.getEntries() == null || addEntryDTO.getEntries().isEmpty()) {
+            return "No entries provided to add";
+        }
+
+        // Add each entry
+        for (TimeSheetEntryCreateDTO entryDTO : addEntryDTO.getEntries()) {
+            TimeSheetEntry entry = new TimeSheetEntry();
+            entry.setTimeSheet(timeSheet);
+            entry.setProjectId(entryDTO.getProjectId());
+            entry.setTaskId(entryDTO.getTaskId());
+            entry.setDescription(entryDTO.getDescription());
+            entry.setFromTime(entryDTO.getFromTime());
+            entry.setToTime(entryDTO.getToTime());
+            entry.setWorkLocation(entryDTO.getWorkLocation());
+            entry.setHoursWorked(entryDTO.getHoursWorked());
+            entry.setOtherDescription(entryDTO.getOtherDescription());
+
+            timeSheet.getEntries().add(entry);
+        }
+
+        // Recalculate total hours
+        timeSheet.setHoursWorked(
+            timeSheet.getEntries().stream()
+                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : java.math.BigDecimal.ZERO)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+        );
+
+        timeSheet.setUpdatedAt(LocalDateTime.now());
+
+        timeSheetRepository.save(timeSheet);
+
+        return "Entries added successfully. Total hours now: " + timeSheet.getHoursWorked();
+    }
+
 }
+
+

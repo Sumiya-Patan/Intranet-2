@@ -1,11 +1,13 @@
 package com.intranet.controller;
 
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
@@ -43,5 +45,12 @@ public class TimeSheetController {
         return ResponseEntity.badRequest().body("Failed to create timesheet");
     }
 
+    }
+
+    @PostMapping("/entries")
+    @Operation(summary = "Add multiple entries to a timesheet")
+    public ResponseEntity<String> addEntriesToTimeSheet(@RequestBody AddEntryDTO addEntryDTO) {
+        String response = timeSheetService.addEntriesToTimeSheet(addEntryDTO);
+        return ResponseEntity.ok().body(response);
     }
 }
