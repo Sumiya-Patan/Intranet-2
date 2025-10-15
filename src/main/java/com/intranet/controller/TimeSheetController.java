@@ -65,7 +65,7 @@ public class TimeSheetController {
         return ResponseEntity.ok().body(response);
     }
 
-    @GetMapping("/weekly-summary")
+    @GetMapping("/weekly-summary-in-range")
     @Operation(summary = "Get timesheets grouped by week for a date range")
     public ResponseEntity<?> getWeeklyTimesheetSummary(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
