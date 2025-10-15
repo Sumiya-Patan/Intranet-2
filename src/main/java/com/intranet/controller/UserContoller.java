@@ -1,6 +1,5 @@
 package com.intranet.controller;
 
-import org.hibernate.annotations.CurrentTimestamp;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +18,4 @@ public class UserContoller {
         return userDTO;
         
     }
-
-    
 }

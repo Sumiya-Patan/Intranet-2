@@ -14,5 +14,6 @@ import com.intranet.entity.WeekInfo;
 public interface WeekInfoRepo extends JpaRepository<WeekInfo, Long>{
 
     Optional<WeekInfo> findByStartDateAndEndDate(LocalDate startDate, LocalDate endDate);
+    Optional<WeekInfo> findByStartDateLessThanEqualAndEndDateGreaterThanEqual(LocalDate startDate, LocalDate endDate);
 
 }

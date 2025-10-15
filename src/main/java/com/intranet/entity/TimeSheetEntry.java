@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "timesheet_entry")
@@ -26,8 +26,9 @@ public class TimeSheetEntry {
     private Long projectId;
     private Long taskId;
     private String description;
-    private LocalTime fromTime;
-    private LocalTime toTime;
+    private String workLocation;
+    private LocalDateTime fromTime;
+    private LocalDateTime toTime;
     private BigDecimal hoursWorked;
     private String otherDescription;
 }
