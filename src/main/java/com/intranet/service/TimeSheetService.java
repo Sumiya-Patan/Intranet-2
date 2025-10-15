@@ -38,10 +38,6 @@ public class TimeSheetService {
 
     @Transactional
     public String createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
-        if (userId == null) throw new IllegalArgumentException("User ID cannot be null");
-        if (workDate == null) throw new IllegalArgumentException("Work date cannot be null");
-        if (entriesDTO == null || entriesDTO.isEmpty()) throw new IllegalArgumentException("TimeSheet entries cannot be empty");
-
         TimeSheet timeSheet = new TimeSheet();
         timeSheet.setUserId(userId);
         timeSheet.setWorkDate(workDate);

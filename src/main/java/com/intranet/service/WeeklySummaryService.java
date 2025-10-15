@@ -63,6 +63,7 @@ public class WeeklySummaryService {
     private TimeSheetSummaryDTO mapTimeSheetToSummaryDTO(TimeSheet ts) {
         List<TimeSheetEntrySummaryDTO> entries = ts.getEntries().stream().map(e -> {
             TimeSheetEntrySummaryDTO dto = new TimeSheetEntrySummaryDTO();
+            dto.setTimesheetEntryid(e.getId());
             dto.setProjectId(e.getProjectId());
             dto.setTaskId(e.getTaskId());
             dto.setDescription(e.getDescription());
