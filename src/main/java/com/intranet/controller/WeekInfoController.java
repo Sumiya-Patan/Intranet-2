@@ -18,7 +18,7 @@ public class WeekInfoController {
     private final WeekInfoService weekInfoService;
 
     @Operation(summary = "Generate WeekInfo entries for a specific month and year")
-    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
+    // @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     @PostMapping("/generate/{year}/{month}")
     public String generateForGivenMonth(@PathVariable int year, @PathVariable int month) {
         weekInfoService.generateWeeksForMonth(year, month);
