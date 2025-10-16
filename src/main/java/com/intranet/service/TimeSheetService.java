@@ -399,41 +399,6 @@ public class TimeSheetService {
         return combinedList;
         }
     
-    
-    public List<ProjectTaskView> getUserTaskViewM() {
-    String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
-
-    ResponseEntity<List<Map<String, Object>>> response =
-            restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    buildEntityWithAuth(),
-                    new ParameterizedTypeReference<>() {}
-            );
-
-    List<Map<String, Object>> projectData = response.getBody();
-    if (projectData == null || projectData.isEmpty()) {
-        return Collections.emptyList();
-    }
-
-    return projectData.stream().map(p -> {
-        Long projectId = ((Number) p.get("projectId")).longValue();
-        String projectName = (String) p.get("projectName");
-
-        List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
-        List<TaskDTO> tasks = taskList.stream()
-                .map(t -> new TaskDTO(
-                        ((Number) t.get("taskId")).longValue(),
-                        (String) t.get("taskName"),
-                        null, // description not available
-                        null, // startTime not available
-                        null  // endTime not available
-                ))
-                .toList();
-
-        return new ProjectTaskView(projectId, projectName, tasks);
-    }).toList();
-    }
     public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
 
     String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
@@ -486,4 +451,75 @@ public class TimeSheetService {
                 })
                 .toList();
     }
+
+    public List<ProjectTaskView> getUserTaskViewM() {
+        // 1️⃣ Fetch from PMS
+        String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
+        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                buildEntityWithAuth(),
+                new ParameterizedTypeReference<>() {}
+        );
+
+        List<Map<String, Object>> pmsData = response.getBody();
+        if (pmsData == null) pmsData = new ArrayList<>();
+
+        // 2️⃣ Fetch from internal DB
+        List<InternalProject> internalProjects = internalProjectRepository.findAll();
+
+        // 3️⃣ Convert PMS projects into DTOs
+        Map<Long, ProjectTaskView> mergedProjects = new LinkedHashMap<>();
+
+        for (Map<String, Object> p : pmsData) {
+            Long projectId = ((Number) p.get("projectId")).longValue();
+            final String[] projectNameHolder = new String[] { (String) p.get("projectName") };
+
+            List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
+
+            List<TaskDTO> tasks = taskList.stream().map(t -> {
+                Long taskId = ((Number) t.get("taskId")).longValue();
+                final String[] taskNameHolder = new String[] { (String) t.get("taskName") };
+
+                return new TaskDTO(taskId, taskNameHolder[0], null, null, null);
+            }).collect(Collectors.toList());
+
+            // Override project name if found internally
+            internalProjects.stream()
+                    .filter(ip -> ip.getProjectId().equals(projectId.intValue()))
+                    .findFirst()
+                    .ifPresent(ip -> {
+                        if (ip.getProjectName() != null) projectNameHolder[0] = ip.getProjectName();
+                    });
+
+            mergedProjects.put(projectId, new ProjectTaskView(projectId, projectNameHolder[0], tasks));
+        }
+
+        // 4️⃣ Add internal-only projects (not present in PMS)
+        Map<Integer, List<InternalProject>> groupedInternal =
+                internalProjects.stream().collect(Collectors.groupingBy(InternalProject::getProjectId));
+
+        for (Map.Entry<Integer, List<InternalProject>> entry : groupedInternal.entrySet()) {
+            Long internalProjId = entry.getKey().longValue();
+            if (!mergedProjects.containsKey(internalProjId)) {
+                List<TaskDTO> tasks = entry.getValue().stream()
+                        .map(ip -> new TaskDTO(
+                                ip.getTaskId().longValue(),
+                                ip.getTaskName(),
+                                null, null, null))
+                        .collect(Collectors.toList());
+
+                InternalProject first = entry.getValue().get(0);
+                mergedProjects.put(internalProjId, new ProjectTaskView(
+                        internalProjId,
+                        first.getProjectName(),
+                        tasks
+                ));
+            }
+        }
+
+        // 5️⃣ Return combined sorted list
+        return new ArrayList<>(mergedProjects.values());
+    }
+
 }

@@ -1,4 +1,4 @@
-package com.intranet.controller;
+package com.intranet.controller.external;
 
 import java.util.List;
 
