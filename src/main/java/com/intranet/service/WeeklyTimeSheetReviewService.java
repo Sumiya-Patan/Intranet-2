@@ -60,12 +60,17 @@ public class WeeklyTimeSheetReviewService {
 
         timeSheetRepo.saveAll(timeSheets);
 
-        // Create weekly review entry
-        WeeklyTimeSheetReview review = new WeeklyTimeSheetReview();
+            // Check if a weekly review already exists for this user & week
+        WeeklyTimeSheetReview review = weeklyReviewRepo
+                .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
+                .orElseGet(WeeklyTimeSheetReview::new);
+
+        // Set/update fields
         review.setWeekInfo(commonWeek);
         review.setStatus(WeeklyTimeSheetReview.Status.PENDING);
         review.setSubmittedAt(LocalDateTime.now());
         review.setUserId(userId);
+
         weeklyReviewRepo.save(review);
 
         return String.format(
