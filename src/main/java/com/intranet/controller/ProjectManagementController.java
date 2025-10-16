@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.intranet.dto.UserDTO;
+import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
@@ -33,5 +34,24 @@ public class ProjectManagementController {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
         return ResponseEntity.ok(response);
     }
+
+
+    @Operation(summary = "Get Project and Task of all projects")
+    // @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @GetMapping("/all")
+    public ResponseEntity<List<ProjectTaskView>> getTimesheetViewM(@CurrentUser UserDTO user, HttpServletRequest request) {
+        List<ProjectTaskView> response = timesheetService.getUserTaskViewM();
+        return ResponseEntity.ok(response);
+    }
     
+    @Operation(summary = "Manager and Project info of a current user")
+    
+    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @GetMapping("/managers")
+    public ResponseEntity<List<ManagerUserMappingDTO>> getUsersAssignedToManagers(
+            @CurrentUser UserDTO user, HttpServletRequest request) {
+        List<ManagerUserMappingDTO> result = timesheetService.getUsersAssignedToManagers(user.getId());
+        return ResponseEntity.ok(result);
+    }
 }

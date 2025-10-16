@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,44 +22,51 @@ public class WeeklySummaryService {
     private final WeekInfoRepo weekInfoRepo;
 
     public WeeklySummaryDTO getWeeklySummary(Long userId) {
-        // 1️⃣ Find all weeks for the current month
-        LocalDate now = LocalDate.now();
-        LocalDate startOfMonth = now.withDayOfMonth(1);
-        LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
-        List<WeekInfo> weeks = weekInfoRepo.findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(startOfMonth, endOfMonth);
+    // 1️⃣ Find all weeks for the current month
+    LocalDate now = LocalDate.now();
+    LocalDate startOfMonth = now.withDayOfMonth(1);
+    LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+    List<WeekInfo> weeks = weekInfoRepo
+            .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(startOfMonth, endOfMonth);
 
-        // 2️⃣ Fetch timesheets for these weeks
-        List<Long> weekIds = weeks.stream().map(WeekInfo::getId).collect(Collectors.toList());
-        List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(userId, weekIds);
+    // 2️⃣ Fetch timesheets for these weeks
+    List<Long> weekIds = weeks.stream().map(WeekInfo::getId).collect(Collectors.toList());
+    List<TimeSheet> timesheets = timeSheetRepo
+            .findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(userId, weekIds);
 
-        // 3️⃣ Map each week
-        List<WeekSummaryDTO> weeklySummary = weeks.stream().map(week -> {
-            List<TimeSheetSummaryDTO> weekTimesheets = timesheets.stream()
-                    .filter(ts -> ts.getWeekInfo().getId().equals(week.getId()))
-                    .map(this::mapTimeSheetToSummaryDTO)
-                    .collect(Collectors.toList());
+    // 🔄 Reverse the weeks to show last → first
+    Collections.reverse(weeks);
 
-            WeekSummaryDTO weekDTO = new WeekSummaryDTO();
-            weekDTO.setWeekId(week.getId());
-            weekDTO.setStartDate(week.getStartDate());
-            weekDTO.setEndDate(week.getEndDate());
-            // ✅ Calculate total hours of this week
-            BigDecimal totalHours = TimeUtil.sumHours(
+    // 3️⃣ Map each week
+    List<WeekSummaryDTO> weeklySummary = weeks.stream().map(week -> {
+        List<TimeSheetSummaryDTO> weekTimesheets = timesheets.stream()
+                .filter(ts -> ts.getWeekInfo().getId().equals(week.getId()))
+                .map(this::mapTimeSheetToSummaryDTO)
+                .collect(Collectors.toList());
+
+        WeekSummaryDTO weekDTO = new WeekSummaryDTO();
+        weekDTO.setWeekId(week.getId());
+        weekDTO.setStartDate(week.getStartDate());
+        weekDTO.setEndDate(week.getEndDate());
+
+        // ✅ Calculate total hours of this week (proper 01.67 format)
+        BigDecimal totalHours = TimeUtil.sumHours(
                 weekTimesheets.stream()
-                    .map(TimeSheetSummaryDTO::getHoursWorked)
-                    .collect(Collectors.toList())
-            );
-            weekDTO.setTotalHours(totalHours);
-            weekDTO.setTimesheets(weekTimesheets);
-            return weekDTO;
-        }).collect(Collectors.toList());
+                        .map(TimeSheetSummaryDTO::getHoursWorked)
+                        .collect(Collectors.toList())
+        );
+        weekDTO.setTotalHours(totalHours);
+        weekDTO.setTimesheets(weekTimesheets);
+        return weekDTO;
+    }).collect(Collectors.toList());
 
-        WeeklySummaryDTO summaryDTO = new WeeklySummaryDTO();
-        summaryDTO.setUserId(userId);
-        summaryDTO.setWeeklySummary(weeklySummary);
+    WeeklySummaryDTO summaryDTO = new WeeklySummaryDTO();
+    summaryDTO.setUserId(userId);
+    summaryDTO.setWeeklySummary(weeklySummary);
 
-        return summaryDTO;
+    return summaryDTO;
     }
+
 
     private TimeSheetSummaryDTO mapTimeSheetToSummaryDTO(TimeSheet ts) {
         List<TimeSheetEntrySummaryDTO> entries = ts.getEntries().stream().map(e -> {

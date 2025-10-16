@@ -5,7 +5,9 @@ import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
 import com.intranet.dto.WeekSummaryDTO;
+import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
+import com.intranet.dto.external.ProjectWithUsersDTO;
 import com.intranet.dto.external.TaskDTO;
 import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
@@ -396,4 +398,92 @@ public class TimeSheetService {
 
         return combinedList;
         }
+    
+    
+    public List<ProjectTaskView> getUserTaskViewM() {
+    String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
+
+    ResponseEntity<List<Map<String, Object>>> response =
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    buildEntityWithAuth(),
+                    new ParameterizedTypeReference<>() {}
+            );
+
+    List<Map<String, Object>> projectData = response.getBody();
+    if (projectData == null || projectData.isEmpty()) {
+        return Collections.emptyList();
     }
+
+    return projectData.stream().map(p -> {
+        Long projectId = ((Number) p.get("projectId")).longValue();
+        String projectName = (String) p.get("projectName");
+
+        List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
+        List<TaskDTO> tasks = taskList.stream()
+                .map(t -> new TaskDTO(
+                        ((Number) t.get("taskId")).longValue(),
+                        (String) t.get("taskName"),
+                        null, // description not available
+                        null, // startTime not available
+                        null  // endTime not available
+                ))
+                .toList();
+
+        return new ProjectTaskView(projectId, projectName, tasks);
+    }).toList();
+    }
+    public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
+
+    String url = String.format("%s/projects/member/%d", pmsBaseUrl, userId);
+     // ✅ Use helper method to build HttpEntity with Authorization
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // Use exchange instead of getForEntity to pass headers
+    ResponseEntity<List> response = restTemplate.exchange(
+            url,
+            HttpMethod.GET,
+            entity,
+            List.class
+    );
+
+        if (response.getBody() == null) {
+            return Collections.emptyList();
+        }
+
+        // Only keep projects where given user is a member
+        List<Map<String, Object>> filteredProjects = ((List<Map<String, Object>>) response.getBody()).stream()
+                .filter(p -> ((List<Map<String, Object>>) p.get("members")).stream()
+                        .anyMatch(m -> Objects.equals(((Number) m.get("id")).longValue(), userId)))
+                .toList();
+
+        // Group by manager
+        Map<Long, List<Map<String, Object>>> projectsByManager = filteredProjects.stream()
+                .collect(Collectors.groupingBy(
+                        p -> ((Number) ((Map<String, Object>) p.get("owner")).get("id")).longValue()
+                ));
+
+        // Build DTO
+        return projectsByManager.entrySet().stream()
+                .map(entry -> {
+                    Long managerId = entry.getKey();
+                    String managerName = (String) ((Map<String, Object>) entry.getValue().get(0).get("owner")).get("name");
+
+                    List<ProjectWithUsersDTO> projects = entry.getValue().stream()
+                            .map(p -> {
+                                Long projectId = ((Number) p.get("id")).longValue();
+                                String projectName = (String) p.get("name");
+
+                                // Only this user in "users"
+                                // List<UserSDTO> users = List.of(new UserSDTO(userId, "Ajay default"));
+
+                                return new ProjectWithUsersDTO(projectId, projectName);
+                            })
+                            .toList();
+
+                    return new ManagerUserMappingDTO(managerId, managerName, projects);
+                })
+                .toList();
+    }
+}
