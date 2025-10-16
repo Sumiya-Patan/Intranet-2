@@ -5,14 +5,30 @@ import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
 import com.intranet.dto.WeekSummaryDTO;
+import com.intranet.dto.external.ProjectTaskView;
+import com.intranet.dto.external.TaskDTO;
+import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.entity.WeekInfo;
+import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
+
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -20,8 +36,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +52,7 @@ public class TimeSheetService {
 
     private final TimeSheetRepo timeSheetRepository;
     private final WeekInfoRepo weekInfoRepository;
+    private final InternalProjectRepo internalProjectRepository;
 
     @Transactional
     public String createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
@@ -276,6 +295,105 @@ public class TimeSheetService {
         return "Entries added successfully. Total hours now: " + timeSheet.getHoursWorked();
     }
 
-}
+    private final RestTemplate restTemplate = new RestTemplate();
+    @Value("${pms.api.base-url}")
+    private String pmsBaseUrl;
 
+    private HttpEntity<Void> buildEntityWithAuth() {
+    ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    if (attrs == null) {
+        return (HttpEntity<Void>) HttpEntity.EMPTY;
+    }
 
+    HttpServletRequest request = attrs.getRequest();
+    String authHeader = request.getHeader("Authorization");
+
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader);
+    }
+
+    return new HttpEntity<>(headers);
+    }
+    
+    public List<ProjectTaskView> getUserTaskView(Long userId) {
+        // 🔹 Step 1: Call PMS API dynamically using configured base URL
+        String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
+
+        ResponseEntity<List<Map<String, Object>>> response =
+                restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        buildEntityWithAuth(),
+                        new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+                );
+
+        List<Map<String, Object>> taskData = response.getBody();
+        if (taskData == null || taskData.isEmpty()) {
+            taskData = Collections.emptyList();
+        }
+
+        // 🔹 Step 2: Group external PMS tasks by projectId
+        Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
+
+        for (Map<String, Object> task : taskData) {
+            Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
+            String taskName = (String) task.get("title");
+            String description = (String) task.get("description");
+
+            // Extract project info safely
+            Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
+            Long projectId = null;
+            final String projectName;
+
+            if (projectObj != null) {
+                Object idObj = projectObj.get("id");
+                if (idObj instanceof Number) {
+                    projectId = ((Number) idObj).longValue();
+                }
+                projectName = (String) projectObj.get("name");
+            } else {
+                projectName = null;
+            }
+
+            String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
+            String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+
+            TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
+
+            if (projectId != null) {
+                projectMap
+                    .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
+                    .getTasks()
+                    .add(taskDTO);
+            }
+        }
+
+        // 🔹 Step 3: Fetch Internal Projects from DB
+        List<InternalProject> internalProjects = internalProjectRepository.findAll();
+        Map<Long, ProjectTaskView> internalMap = new LinkedHashMap<>();
+
+        for (InternalProject ip : internalProjects) {
+            Long projectId = ip.getProjectId() != null ? ip.getProjectId().longValue() : null;
+            Long taskId = ip.getTaskId() != null ? ip.getTaskId().longValue() : null;
+
+            internalMap
+                .computeIfAbsent(projectId != null ? projectId : 0L,
+                        pid -> new ProjectTaskView(pid, ip.getProjectName(), new ArrayList<>()))
+                .getTasks()
+                .add(new TaskDTO(
+                        taskId,
+                        ip.getTaskName(),
+                        null, // description
+                        null, // startTime
+                        null  // endTime
+                ));
+        }
+
+        // 🔹 Step 4: Combine External (PMS) and Internal project-task data
+        List<ProjectTaskView> combinedList = new ArrayList<>(projectMap.values());
+        combinedList.addAll(internalMap.values());
+
+        return combinedList;
+        }
+    }

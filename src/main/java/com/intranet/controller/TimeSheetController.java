@@ -57,7 +57,7 @@ public class TimeSheetController {
 
     }
 
-    @PostMapping("/entries")
+    @PostMapping("/addEntries")
     @Operation(summary = "Add multiple entries to a timesheet")
     public ResponseEntity<String> addEntriesToTimeSheet(@RequestBody AddEntryDTO addEntryDTO) {
         String response = timeSheetService.addEntriesToTimeSheet(addEntryDTO);
