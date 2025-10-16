@@ -5,7 +5,6 @@ import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
 import com.intranet.dto.WeekSummaryDTO;
-import com.intranet.dto.WeeklySummaryDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.entity.WeekInfo;
