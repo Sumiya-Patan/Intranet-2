@@ -21,11 +21,19 @@ public class WeeklyTimeSheetReview {
     @JoinColumn(name = "week_info_id")
     private WeekInfo weekInfo;
 
+
+    @Column(nullable = false)
+    private Long userId; // link who submitted this week
+
+    @Column(nullable = false)
+    private java.time.LocalDateTime submittedAt; // when it was submitted
+
+
     @Enumerated(EnumType.STRING)
     private Status status;
 
     public enum Status {
-        DRAFT, SUBMITTED, APPROVED, PARTIALLY_REJECTED, REJECTED
+        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED
     }
 
 
