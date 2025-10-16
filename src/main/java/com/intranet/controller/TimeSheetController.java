@@ -93,7 +93,7 @@ public class TimeSheetController {
             return ResponseEntity.badRequest().body("Failed to retrieve timesheets: " + e.getMessage());
         }
     }
-     @DeleteMapping("/entries")
+     @DeleteMapping("/deleteEntries")
      @Operation(summary = "Delete specific entries from a timesheet")
     public ResponseEntity<String> deleteEntries(@RequestBody DeleteTimeSheetEntriesRequest request) {
         String message = timeSheetService.deleteEntries(request);
