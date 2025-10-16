@@ -19,10 +19,9 @@ public class TimeSheetReview {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "timesheet_id")
-    private TimeSheet timeSheet;
-
+    
+    private Long userId;
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "week_info_id")
     private WeekInfo weekInfo;

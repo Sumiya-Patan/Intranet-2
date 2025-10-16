@@ -46,9 +46,6 @@ public class TimeSheet {
     @OneToMany(mappedBy = "timeSheet", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimeSheetManagerSubmit> managerSubmissions = new ArrayList<>();
 
-    @OneToMany(mappedBy = "timeSheet", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<TimeSheetReview> reviews = new ArrayList<>();
-
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
