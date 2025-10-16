@@ -1,6 +1,7 @@
 package com.intranet.service;
 
 import com.intranet.dto.AddEntryDTO;
+import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
@@ -14,6 +15,7 @@ import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.entity.WeekInfo;
 import com.intranet.repository.InternalProjectRepo;
+import com.intranet.repository.TimeSheetEntryRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
 
@@ -55,6 +57,7 @@ public class TimeSheetService {
     private final TimeSheetRepo timeSheetRepository;
     private final WeekInfoRepo weekInfoRepository;
     private final InternalProjectRepo internalProjectRepository;
+    private final TimeSheetEntryRepo entryRepository;
 
     @Transactional
     public String createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
@@ -297,6 +300,44 @@ public class TimeSheetService {
         return "Entries added successfully. Total hours now: " + timeSheet.getHoursWorked();
     }
 
+    @Transactional
+    public String deleteEntries(DeleteTimeSheetEntriesRequest request) {
+        TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
+                .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
+
+        // Filter entries that belong to this timesheet and need to be deleted
+        List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()
+                .filter(e -> request.getEntryIds().contains(e.getId()))
+                .toList();
+
+        if (entriesToDelete.isEmpty()) {
+            return "No matching entries found to delete.";
+        }
+
+        // Remove entries
+        timeSheet.getEntries().removeAll(entriesToDelete);
+        entryRepository.deleteAll(entriesToDelete);
+
+        // If all entries deleted, delete timesheet itself
+        if (timeSheet.getEntries().isEmpty()) {
+            timeSheetRepository.delete(timeSheet);
+            return "All entries deleted. TimeSheet also removed.";
+        }
+
+        // Recalculate total hours
+        BigDecimal totalHours = timeSheet.getEntries().stream()
+                .map(TimeSheetEntry::getHoursWorked)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        timeSheet.setHoursWorked(totalHours);
+
+        timeSheetRepository.save(timeSheet);
+
+        return "Selected entries deleted. Total hours now: " + totalHours;
+    }
+
+     
+
+   
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;

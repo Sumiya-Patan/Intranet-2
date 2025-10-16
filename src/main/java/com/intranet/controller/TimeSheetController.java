@@ -1,5 +1,7 @@
 package com.intranet.controller;
 
+
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -8,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.intranet.dto.AddEntryDTO;
+import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.UserDTO;
@@ -63,6 +66,7 @@ public class TimeSheetController {
         String response = timeSheetService.addEntriesToTimeSheet(addEntryDTO);
         return ResponseEntity.ok().body(response);
     }
+    
 
     @GetMapping("/weekly-summary-in-range")
     @Operation(summary = "Get timesheets grouped by week for a date range")
@@ -88,5 +92,11 @@ public class TimeSheetController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Failed to retrieve timesheets: " + e.getMessage());
         }
+    }
+     @DeleteMapping("/entries")
+     @Operation(summary = "Delete specific entries from a timesheet")
+    public ResponseEntity<String> deleteEntries(@RequestBody DeleteTimeSheetEntriesRequest request) {
+        String message = timeSheetService.deleteEntries(request);
+        return ResponseEntity.ok(message);
     }
 }
