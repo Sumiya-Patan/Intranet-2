@@ -53,4 +53,6 @@ public class TimeSheet {
         DRAFT, SUBMITTED, APPROVED, REJECTED, RE_SUBMITTED
     }
 
+    @OneToMany(mappedBy = "timeSheet", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TimeSheetReview> reviews = new ArrayList<>();
 }

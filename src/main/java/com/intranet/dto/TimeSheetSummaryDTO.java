@@ -11,6 +11,7 @@ public class TimeSheetSummaryDTO {
     private Long timesheetId;
     private LocalDate workDate;
     private BigDecimal hoursWorked;
-    private String status; // Uncomment if status is needed
+    private String status;
     private List<TimeSheetEntrySummaryDTO> entries;
+    private List<ActionStatusDTO> actionStatus;
 }

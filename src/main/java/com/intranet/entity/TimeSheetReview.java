@@ -26,6 +26,10 @@ public class TimeSheetReview {
     @JoinColumn(name = "week_info_id")
     private WeekInfo weekInfo;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "timesheet_id")
+    private TimeSheet timeSheet; // Optional - for daily reviews
+
     private Long managerId;
 
     @Enumerated(EnumType.STRING)

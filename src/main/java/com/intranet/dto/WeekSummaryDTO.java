@@ -12,5 +12,6 @@ public class WeekSummaryDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private BigDecimal totalHours;
+    private String weeklyStatus;
     private List<TimeSheetSummaryDTO> timesheets;
 }
