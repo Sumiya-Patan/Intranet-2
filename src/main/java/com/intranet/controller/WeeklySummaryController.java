@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/timesheets")
+@RequestMapping("/api/timesheet")
 @RequiredArgsConstructor
 public class WeeklySummaryController {
 
@@ -24,7 +24,7 @@ public class WeeklySummaryController {
      * @param userId the ID of the user
      * @return weekly summary DTO
      */
-    @GetMapping("/weekly-summary")
+    @GetMapping("/history")
     @Operation(summary = "Get weekly summary of a user for the current month")
     public ResponseEntity<WeeklySummaryDTO> getWeeklySummary(@CurrentUser UserDTO user) {
         WeeklySummaryDTO summary = weeklySummaryService.getWeeklySummary(user.getId());
