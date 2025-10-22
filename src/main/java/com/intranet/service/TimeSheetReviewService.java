@@ -48,7 +48,7 @@ public class TimeSheetReviewService {
         }
 
         boolean allSubmitted = sheets.stream()
-        .allMatch(ts -> ts.getStatus() == TimeSheet.Status.SUBMITTED);
+        .allMatch(ts -> ts.getStatus()!= TimeSheet.Status.DRAFT);
 
         if (!allSubmitted) {
             throw new IllegalArgumentException("Only 'Submitted' timesheets can be reviewed.");

@@ -31,4 +31,8 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
 
      List<TimeSheet> findByUserIdAndWeekInfo_Id(Long userId, Long weekInfoId);
 
+     @Query("SELECT ts FROM TimeSheet ts WHERE ts.userId IN :userIds AND ts.status <> 'DRAFT'")
+    List<TimeSheet> findNonDraftByUserIds(@Param("userIds") Set<Long> userIds);
+
+
 }

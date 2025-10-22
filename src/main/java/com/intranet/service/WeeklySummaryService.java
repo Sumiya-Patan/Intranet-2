@@ -257,7 +257,7 @@ public class WeeklySummaryService {
                     } else if (anyApproved) {
                         overallStatus = "PARTIALLY APPROVED";
                     } else {
-                        overallStatus = "SUBMITTED";
+                        overallStatus = ts.getStatus().name();
                     }
 
                     tsDTO.setActionStatus(actionStatusList);
@@ -295,7 +295,7 @@ public class WeeklySummaryService {
         if (anyRejected) weekDTO.setWeeklyStatus("REJECTED");
         else if (allApproved) weekDTO.setWeeklyStatus("APPROVED");
         else if (anyApproved) weekDTO.setWeeklyStatus("PARTIALLY APPROVED");
-        else weekDTO.setWeeklyStatus("SUBMITTED");
+        else weekDTO.setWeeklyStatus("DRAFT/SUBMITTED");
 
         return weekDTO;
         }

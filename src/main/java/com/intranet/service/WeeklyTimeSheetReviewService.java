@@ -50,6 +50,19 @@ public class WeeklyTimeSheetReviewService {
             throw new IllegalArgumentException("User not authorized to submit these timesheets.");
         }
 
+            // Check if a weekly review already exists for this user & week
+        WeeklyTimeSheetReview review = weeklyReviewRepo
+                .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
+                .orElseGet(WeeklyTimeSheetReview::new);
+                
+                // ✅ Allow submission only if new or status is SUBMITTED
+        if (review.getStatus() != null 
+                && review.getStatus() != WeeklyTimeSheetReview.Status.SUBMITTED) {
+            throw new IllegalStateException(
+                "Cannot submit timesheets for this week. Weekly review is already " + review.getStatus()
+            );
+        }
+
         // Update all timesheets from DRAFT → SUBMITTED
         timeSheets.forEach(ts -> {
             if (ts.getStatus() == TimeSheet.Status.DRAFT) {
@@ -59,15 +72,6 @@ public class WeeklyTimeSheetReviewService {
         });
 
         timeSheetRepo.saveAll(timeSheets);
-
-            // Check if a weekly review already exists for this user & week
-        WeeklyTimeSheetReview review = weeklyReviewRepo
-                .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
-                .orElseGet(WeeklyTimeSheetReview::new);
-                
-        if (review.getStatus()!= null && review.getStatus() != WeeklyTimeSheetReview.Status.APPROVED) {
-            throw new IllegalStateException("Weekly already approved.");
-        }
         
         // Set/update fields
         review.setWeekInfo(commonWeek);
