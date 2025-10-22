@@ -3,6 +3,7 @@ package com.intranet.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import com.intranet.dto.UserDTO;
@@ -20,6 +21,7 @@ public class WeeklyTimeSheetReviewController {
     private final WeeklyTimeSheetReviewService reviewService;
 
     @PostMapping("/submit")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET') OR hasAuthority('EDIT_TIMESHEET')")
     @Operation(summary = "Submit all daily timesheets of an user to manager for weekly review")
     public ResponseEntity<?> submitWeeklyTimesheets(
             @CurrentUser UserDTO user,

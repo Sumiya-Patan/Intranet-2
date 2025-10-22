@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -33,6 +34,7 @@ public class WeeklySummaryController {
     // }
 
     @GetMapping("/history")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     @Operation(summary = "Get weekly summary of a user for the current month")
     public ResponseEntity<?> getWeeklySummary2(@CurrentUser UserDTO user) {
         try{

@@ -27,6 +27,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 
 @RestController
@@ -38,6 +39,7 @@ public class TimeSheetController {
 
     @PostMapping("/create")
     @Operation(summary = "Submit a new timesheet")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> submitTimeSheet(
         @CurrentUser UserDTO currentUser,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate workDate,
@@ -64,6 +66,7 @@ public class TimeSheetController {
 
     @PostMapping("/addEntries")
     @Operation(summary = "Add multiple entries to a timesheet")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<String> addEntriesToTimeSheet(@RequestBody AddEntryDTO addEntryDTO) {
         String response = timeSheetService.addEntriesToTimeSheet(addEntryDTO);
         return ResponseEntity.ok().body(response);
@@ -72,6 +75,7 @@ public class TimeSheetController {
 
     @GetMapping("/weekly-summary-in-range")
     @Operation(summary = "Get timesheets grouped by week for a date range")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> getWeeklyTimesheetSummary(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
@@ -88,6 +92,7 @@ public class TimeSheetController {
 
     @GetMapping("/debug/all")
     @Operation(summary = "Debug endpoint to check all timesheets in database")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> debugAllTimesheets() {
         try {
             return ResponseEntity.ok(timeSheetService.debugGetAllTimesheets());
@@ -95,17 +100,23 @@ public class TimeSheetController {
             return ResponseEntity.badRequest().body("Failed to retrieve timesheets: " + e.getMessage());
         }
     }
-     @DeleteMapping("/deleteEntries")
-     @Operation(summary = "Delete specific entries from a timesheet")
+     
+    
+    @DeleteMapping("/deleteEntries")
+    @Operation(summary = "Delete specific entries from a timesheet")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<String> deleteEntries(@RequestBody DeleteTimeSheetEntriesRequest request) {
         String message = timeSheetService.deleteEntries(request);
         return ResponseEntity.ok(message);
     }
+    
+    
     @PutMapping("/updateEntries")
-@Operation(summary = "Update multiple entries in a timesheet")
-public ResponseEntity<String> updateEntries(@RequestBody TimeSheetUpdateRequest request) {
-    String message = timeSheetService.updateEntries(request);
-    return ResponseEntity.ok(message);
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
+    @Operation(summary = "Update multiple entries in a timesheet")
+    public ResponseEntity<String> updateEntries(@RequestBody TimeSheetUpdateRequest request) {
+        String message = timeSheetService.updateEntries(request);
+        return ResponseEntity.ok(message);
 }
 
     

@@ -3,6 +3,7 @@ package com.intranet.controller.external;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,6 +26,7 @@ public class ManagerWeeklySummaryController {
 
     @GetMapping("/manager")
     @Operation(summary = "Get weekly submitted timesheets grouped by user for the manager")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<List<ManagerWeeklySummaryDTO>> getSubmittedWeeklySummary(
             @CurrentUser UserDTO user,
             HttpServletRequest request) {

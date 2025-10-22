@@ -20,15 +20,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
-@RequestMapping("/api/project")
+@RequestMapping("/api/project-info")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class ProjectManagementController {
 
     @Autowired
     private TimeSheetService timesheetService;
 
-     @Operation(summary = "Get Project and Task of a  current user")
-    // @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @Operation(summary = "Get Project and Task of a  current user")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping
     public ResponseEntity<List<ProjectTaskView>> getTimesheetView(@CurrentUser UserDTO user, HttpServletRequest request) {
         List<ProjectTaskView> response = timesheetService.getUserTaskView(user.getId());
@@ -37,7 +37,7 @@ public class ProjectManagementController {
 
 
     @Operation(summary = "Get Project and Task of all projects")
-    // @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping("/all")
     public ResponseEntity<List<ProjectTaskView>> getTimesheetViewM(@CurrentUser UserDTO user, HttpServletRequest request) {
         List<ProjectTaskView> response = timesheetService.getUserTaskViewM();
@@ -45,8 +45,6 @@ public class ProjectManagementController {
     }
     
     @Operation(summary = "Manager and Project info of a current user")
-    
-    // @PreAuthorize("@endpointRoleService.hasAccess(#request.requestURI, #request.method, authentication)")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     @GetMapping("/managers")
     public ResponseEntity<List<ManagerUserMappingDTO>> getUsersAssignedToManagers(
