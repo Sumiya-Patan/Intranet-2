@@ -24,6 +24,6 @@ public class OpenApiConfig {
           .bearerFormat("JWT")
         )
       )
-      .info(new Info().title("My API").version("1.0"));
+      .info(new Info().title("TimeSheet Management").version("1.0"));
   }
 }
