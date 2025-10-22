@@ -65,9 +65,9 @@ public class WeeklyTimeSheetReviewService {
                 .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
                 .orElseGet(WeeklyTimeSheetReview::new);
                 
-        if (review.getStatus()!= null && review.getStatus() != WeeklyTimeSheetReview.Status.APPROVED) {
-            throw new IllegalStateException("Weekly review already approved.");
-        }
+        // if (review.getStatus()!= null && review.getStatus() != WeeklyTimeSheetReview.Status.APPROVED) {
+        //     throw new IllegalStateException("Weekly review already approved.");
+        // }
         
         // Set/update fields
         review.setWeekInfo(commonWeek);

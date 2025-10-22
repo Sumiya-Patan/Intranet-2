@@ -83,7 +83,12 @@ public class TimeSheetReviewService {
             review.setReviewedAt(LocalDateTime.now());
 
             reviewRepo.save(review);
-        }
+
+        // ✅ Reflect the review status directly on the timesheet
+        ts.setStatus(TimeSheet.Status.valueOf(status));
+        timeSheetRepo.save(ts);
+        
+    }
 
         return String.format("%d timesheets %s successfully.", 
                 sheets.size(), dto.getStatus().toUpperCase());

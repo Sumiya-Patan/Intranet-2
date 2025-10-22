@@ -189,6 +189,8 @@ public class WeeklySummaryService {
                 .filter(ts -> ts.getWeekInfo().getId().equals(week.getId()))
                 .collect(Collectors.toList());
 
+
+        
         List<TimeSheetSummaryDTO> sheetDTOs = new ArrayList<>();
 
         for (TimeSheet ts : weekSheets) {
@@ -223,14 +225,7 @@ public class WeeklySummaryService {
             boolean anyRejected = actionStatusList.stream().anyMatch(a -> "REJECTED".equalsIgnoreCase(a.getStatus()));
             boolean allApproved = !actionStatusList.isEmpty() && actionStatusList.stream().allMatch(a -> "APPROVED".equalsIgnoreCase(a.getStatus()));
             boolean anyApproved = actionStatusList.stream().anyMatch(a -> "APPROVED".equalsIgnoreCase(a.getStatus()));
-            boolean allPending = actionStatusList.stream().allMatch(a -> "PENDING".equalsIgnoreCase(a.getStatus()));
-
-            if (anyRejected) overallStatus = "Rejected";
-            else if (allApproved) overallStatus = "Approved";
-            else if (anyApproved) overallStatus = "Partially Approved";
-            else if (allPending || actionStatusList.isEmpty()) overallStatus = "Pending";
-            else overallStatus = "Pending";
-
+            // boolean allPending = actionStatusList.stream().allMatch(a -> "PENDING".equalsIgnoreCase(a.getStatus()));
 
                 List<TimeSheetEntrySummaryDTO> entries = ts.getEntries().stream().map(e -> {
                 TimeSheetEntrySummaryDTO dto = new TimeSheetEntrySummaryDTO();
@@ -251,10 +246,23 @@ public class WeeklySummaryService {
             tsDTO.setWorkDate(ts.getWorkDate());
             tsDTO.setHoursWorked(ts.getHoursWorked());
             tsDTO.setEntries(entries);
-            tsDTO.setActionStatus(actionStatusList);
-            tsDTO.setStatus(overallStatus);
-            sheetDTOs.add(tsDTO);
 
+            if (actionStatusList.isEmpty()) {
+                overallStatus = "PENDING";
+                actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "PENDING"));
+                    } else if (anyRejected) {
+                        overallStatus = "REJECTED";
+                    } else if (allApproved) {
+                        overallStatus = "APPROVED";
+                    } else if (anyApproved) {
+                        overallStatus = "PARTIALLY APPROVED";
+                    } else {
+                        overallStatus = "PENDING";
+                    }
+
+                    tsDTO.setActionStatus(actionStatusList);
+                    tsDTO.setStatus(overallStatus);
+                    sheetDTOs.add(tsDTO);
             }
 
         // ✅ Calculate total hours
@@ -266,6 +274,14 @@ public class WeeklySummaryService {
         weekDTO.setWeekId(week.getId());
         weekDTO.setStartDate(week.getStartDate());
         weekDTO.setEndDate(week.getEndDate());
+        // 🔸 Validation: No timesheets found for this week
+            if (weekSheets.isEmpty()) {
+                weekDTO.setTimesheets(Collections.emptyList());
+                weekDTO.setTotalHours(BigDecimal.ZERO);
+                weekDTO.setWeeklyStatus("No Timesheets");
+                return weekDTO;
+            }
+        else {
         weekDTO.setTotalHours(totalHours);
         weekDTO.setTimesheets(sheetDTOs);
 
@@ -273,6 +289,8 @@ public class WeeklySummaryService {
         boolean anyRejected = sheetDTOs.stream().anyMatch(ts -> "Rejected".equalsIgnoreCase(ts.getStatus()));
         boolean allApproved = !sheetDTOs.isEmpty() && sheetDTOs.stream().allMatch(ts -> "Approved".equalsIgnoreCase(ts.getStatus()));
         boolean anyApproved = sheetDTOs.stream().anyMatch(ts -> "Partially Approved".equalsIgnoreCase(ts.getStatus()) || "Approved".equalsIgnoreCase(ts.getStatus()));
+        
+        
 
         if (anyRejected) weekDTO.setWeeklyStatus("Rejected");
         else if (allApproved) weekDTO.setWeeklyStatus("Approved");
@@ -280,6 +298,7 @@ public class WeeklySummaryService {
         else weekDTO.setWeeklyStatus("Pending");
 
         return weekDTO;
+        }
     }
     
 }

@@ -1,5 +1,6 @@
 package com.intranet.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,5 +14,7 @@ public interface TimeSheetReviewRepo  extends JpaRepository<TimeSheetReview, Lon
     Optional<TimeSheetReview> findByTimeSheet_IdAndManagerId(Long timesheetId, Long managerId);
 
     Optional<TimeSheetReview> findByWeekInfo_IdAndUserIdAndManagerId(Long weekInfoId, Long userId, Long managerId);
+
+    List<TimeSheetReview> findByTimeSheet_Id(Long id);
 
 }
