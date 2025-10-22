@@ -17,7 +17,7 @@ public class TimeSheetReviewController {
     private final TimeSheetReviewService reviewService;
 
     @PostMapping("/review")
-    @Operation(summary = "Approve or reject multiple timesheets for a user")
+    @Operation(summary = "Approve or reject multiple timesheets for a user by manager")
     public ResponseEntity<?> reviewMultipleTimesheets(
             @CurrentUser UserDTO manager,
             @RequestBody TimeSheetBulkReviewRequestDTO dto) {

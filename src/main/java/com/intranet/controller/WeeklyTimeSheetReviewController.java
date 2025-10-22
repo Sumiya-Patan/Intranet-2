@@ -9,6 +9,7 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.WeeklyTimeSheetReviewService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -19,6 +20,7 @@ public class WeeklyTimeSheetReviewController {
     private final WeeklyTimeSheetReviewService reviewService;
 
     @PostMapping("/submit")
+    @Operation(summary = "Submit all daily timesheets of an user to manager for weekly review")
     public ResponseEntity<?> submitWeeklyTimesheets(
             @CurrentUser UserDTO user,
             @RequestBody List<Long> timesheetIds) {
