@@ -4,8 +4,12 @@ import com.intranet.dto.TimeSheetBulkReviewRequestDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
+import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
+import com.intranet.repository.WeekInfoRepo;
+import com.intranet.repository.WeeklyTimeSheetReviewRepo;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +24,8 @@ public class TimeSheetReviewService {
 
     private final TimeSheetRepo timeSheetRepo;
     private final TimeSheetReviewRepo reviewRepo;
+    private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
+    private final WeekInfoRepo weekInfoRepo;
 
     @Transactional
     public String reviewMultipleTimesheets(Long managerId, TimeSheetBulkReviewRequestDTO dto) {
@@ -84,13 +90,84 @@ public class TimeSheetReviewService {
 
             reviewRepo.save(review);
 
-        // ✅ Reflect the review status directly on the timesheet
-        ts.setStatus(TimeSheet.Status.valueOf(status));
+        // ✅ Recalculate overall timesheet status based on all reviews
+        List<TimeSheetReview> allReviews = reviewRepo.findByTimeSheet_Id(ts.getId());
+        TimeSheet.Status overallStatus = calculateOverallStatus(allReviews);
+
+        ts.setStatus(overallStatus);
         timeSheetRepo.save(ts);
+
+        updateWeeklyTimeSheetReview(userId, firstWeekId);
+
         
     }
 
         return String.format("%d timesheets %s successfully.", 
                 sheets.size(), dto.getStatus().toUpperCase());
     }
+
+    private TimeSheet.Status calculateOverallStatus(List<TimeSheetReview> reviews) {
+    if (reviews.isEmpty()) return TimeSheet.Status.SUBMITTED;
+
+    boolean anyRejected = reviews.stream()
+            .anyMatch(r -> r.getStatus() == TimeSheetReview.Status.REJECTED);
+
+    boolean allApproved = !reviews.isEmpty() && reviews.stream()
+            .allMatch(r -> r.getStatus() == TimeSheetReview.Status.APPROVED);
+
+    boolean anyApproved = reviews.stream()
+            .anyMatch(r -> r.getStatus() == TimeSheetReview.Status.APPROVED);
+
+    if (anyRejected) return TimeSheet.Status.REJECTED;
+    else if (allApproved) return TimeSheet.Status.APPROVED;
+    else if (anyApproved) return TimeSheet.Status.PARTIALLY_APPROVED;
+    else return TimeSheet.Status.SUBMITTED;
+    
+    }
+
+    @Transactional
+    public void updateWeeklyTimeSheetReview(Long userId, Long weekInfoId) {
+    // Fetch all timesheets for this user and week
+    List<TimeSheet> weekTimeSheets = timeSheetRepo.findByUserIdAndWeekInfo_Id(userId, weekInfoId);
+    if (weekTimeSheets.isEmpty()) {
+        
+        return ;
+    }
+
+    // Determine the overall weekly status based on timesheet statuses
+    boolean anyRejected = weekTimeSheets.stream()
+            .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.REJECTED);
+    boolean allApproved = !weekTimeSheets.isEmpty() && weekTimeSheets.stream()
+            .allMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED);
+    // boolean anyApproved = weekTimeSheets.stream()
+    //         .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED || ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
+
+    WeeklyTimeSheetReview.Status weeklyStatus;
+    if (anyRejected) {
+        weeklyStatus = WeeklyTimeSheetReview.Status.REJECTED;
+    } else if (allApproved) {
+        weeklyStatus = WeeklyTimeSheetReview.Status.APPROVED;
+    } 
+     else {
+        weeklyStatus = WeeklyTimeSheetReview.Status.SUBMITTED;
+    }
+
+    // Fetch existing weekly review or create a new one
+    WeeklyTimeSheetReview weeklyReview = weeklyReviewRepo
+            .findByUserIdAndWeekInfo_Id(userId, weekInfoId)
+            .orElseGet(() -> {
+                WeeklyTimeSheetReview r = new WeeklyTimeSheetReview();
+                r.setUserId(userId);
+                r.setWeekInfo(weekInfoRepo.findById(weekInfoId)
+                        .orElseThrow(() -> new IllegalArgumentException("Week not found")));
+                return r;
+            });
+
+    // Update status and timestamp
+    weeklyReview.setStatus(weeklyStatus);
+    weeklyReview.setReviewedAt(LocalDateTime.now());
+
+    weeklyReviewRepo.save(weeklyReview);
+}
+
 }

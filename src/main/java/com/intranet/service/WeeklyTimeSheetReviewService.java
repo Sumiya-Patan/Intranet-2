@@ -65,22 +65,28 @@ public class WeeklyTimeSheetReviewService {
                 .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
                 .orElseGet(WeeklyTimeSheetReview::new);
                 
-        // if (review.getStatus()!= null && review.getStatus() != WeeklyTimeSheetReview.Status.APPROVED) {
-        //     throw new IllegalStateException("Weekly review already approved.");
-        // }
+        if (review.getStatus()!= null && review.getStatus() != WeeklyTimeSheetReview.Status.APPROVED) {
+            throw new IllegalStateException("Weekly already approved.");
+        }
         
         // Set/update fields
         review.setWeekInfo(commonWeek);
-        review.setStatus(WeeklyTimeSheetReview.Status.PENDING);
+        review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
         review.setSubmittedAt(LocalDateTime.now());
+        review.setReviewedAt(LocalDateTime.now());
         review.setUserId(userId);
 
         weeklyReviewRepo.save(review);
 
+        String monthName = commonWeek.getStartDate()
+        .getMonth()
+        .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+
         return String.format(
-                "Timesheets submitted successfully for week %d (%d)",
-                commonWeek.getWeekNo(),
-                commonWeek.getYear()
+            "Timesheets submitted successfully for week %d of %s %d",
+            commonWeek.getWeekNo(),
+            monthName,
+            commonWeek.getYear()
         );
     }
 }

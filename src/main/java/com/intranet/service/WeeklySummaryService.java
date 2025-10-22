@@ -248,7 +248,7 @@ public class WeeklySummaryService {
             tsDTO.setEntries(entries);
 
             if (actionStatusList.isEmpty()) {
-                overallStatus = "PENDING";
+                overallStatus = "SUBMITTED";
                 actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "PENDING"));
                     } else if (anyRejected) {
                         overallStatus = "REJECTED";
@@ -257,7 +257,7 @@ public class WeeklySummaryService {
                     } else if (anyApproved) {
                         overallStatus = "PARTIALLY APPROVED";
                     } else {
-                        overallStatus = "PENDING";
+                        overallStatus = "SUBMITTED";
                     }
 
                     tsDTO.setActionStatus(actionStatusList);
@@ -292,10 +292,10 @@ public class WeeklySummaryService {
         
         
 
-        if (anyRejected) weekDTO.setWeeklyStatus("Rejected");
-        else if (allApproved) weekDTO.setWeeklyStatus("Approved");
-        else if (anyApproved) weekDTO.setWeeklyStatus("Partially Approved");
-        else weekDTO.setWeeklyStatus("Pending");
+        if (anyRejected) weekDTO.setWeeklyStatus("REJECTED");
+        else if (allApproved) weekDTO.setWeeklyStatus("APPROVED");
+        else if (anyApproved) weekDTO.setWeeklyStatus("PARTIALLY APPROVED");
+        else weekDTO.setWeeklyStatus("SUBMITTED");
 
         return weekDTO;
         }

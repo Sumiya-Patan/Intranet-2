@@ -50,7 +50,7 @@ public class TimeSheet {
     private LocalDateTime updatedAt;
 
     public enum Status {
-        DRAFT, SUBMITTED, APPROVED, REJECTED, RE_SUBMITTED
+        DRAFT, SUBMITTED, APPROVED, REJECTED, RE_SUBMITTED,PARTIALLY_APPROVED
     }
 
     @OneToMany(mappedBy = "timeSheet", cascade = CascadeType.ALL, orphanRemoval = true)

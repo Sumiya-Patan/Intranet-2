@@ -1,6 +1,8 @@
 package com.intranet.entity;
 
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -33,8 +35,9 @@ public class WeeklyTimeSheetReview {
     private Status status;
 
     public enum Status {
-        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED
+        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED, SUBMITTED
     }
 
-
+    @Column
+    private LocalDateTime reviewedAt; // when it was reviewed
 }

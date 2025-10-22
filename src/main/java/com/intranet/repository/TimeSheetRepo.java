@@ -29,4 +29,6 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
        "WHERE t.userId IN :userIds AND t.status = 'SUBMITTED'")
      List<TimeSheet> findSubmittedByUserIds(@Param("userIds") Set<Long> userIds);
 
+     List<TimeSheet> findByUserIdAndWeekInfo_Id(Long userId, Long weekInfoId);
+
 }
