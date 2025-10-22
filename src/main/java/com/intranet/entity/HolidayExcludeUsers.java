@@ -29,6 +29,7 @@ public class HolidayExcludeUsers {
     private LocalDate holidayDate;
     private String reason;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "holidayExcludeUser", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimeSheetOnHolidays> holidayTimeSheets = new ArrayList<>();
