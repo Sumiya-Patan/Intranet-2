@@ -4,6 +4,7 @@ import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
+import com.intranet.dto.TimeSheetUpdateRequest;
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
@@ -22,6 +23,7 @@ import com.intranet.repository.WeekInfoRepo;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -335,9 +337,6 @@ public class TimeSheetService {
         return "Selected entries deleted. Total hours now: " + totalHours;
     }
 
-     
-
-   
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -562,5 +561,49 @@ public class TimeSheetService {
         // 5️⃣ Return combined sorted list
         return new ArrayList<>(mergedProjects.values());
     }
+    @Autowired
+    private TimeSheetEntryRepo timeSheetEntryRepository;
+@Transactional
+public String updateEntries(TimeSheetUpdateRequest request) {
 
+    TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
+            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
+
+    BigDecimal totalHours = BigDecimal.ZERO;
+
+    for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
+        TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
+                .orElseThrow(() -> new RuntimeException("Entry not found with ID: " + dto.getId()));
+
+        // partial update — only update fields that are provided
+        if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
+        if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
+        if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
+        if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
+        if (dto.getFromTime() != null) entry.setFromTime(dto.getFromTime());
+        if (dto.getToTime() != null) entry.setToTime(dto.getToTime());
+        if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
+        if (dto.getHoursWorked() != null)
+            entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
+
+        timeSheetEntryRepository.save(entry);
+    }
+
+    // Recalculate total hours after update
+    for (TimeSheetEntry e : timeSheet.getEntries()) {
+        if (e.getHoursWorked() != null) {
+            totalHours = totalHours.add(e.getHoursWorked());
+        }
+    }
+
+    timeSheet.setHoursWorked(totalHours);
+    timeSheet.setUpdatedAt(LocalDateTime.now());
+    timeSheetRepository.save(timeSheet);
+
+    return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
 }
+
+    
+}
+
+

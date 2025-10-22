@@ -4,6 +4,7 @@ package com.intranet.controller;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
+import com.intranet.dto.TimeSheetUpdateRequest;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
@@ -99,4 +101,13 @@ public class TimeSheetController {
         String message = timeSheetService.deleteEntries(request);
         return ResponseEntity.ok(message);
     }
+    @PutMapping("/updateEntries")
+@Operation(summary = "Update multiple entries in a timesheet")
+public ResponseEntity<String> updateEntries(@RequestBody TimeSheetUpdateRequest request) {
+    String message = timeSheetService.updateEntries(request);
+    return ResponseEntity.ok(message);
+}
+
+    
+
 }
