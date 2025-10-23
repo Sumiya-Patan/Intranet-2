@@ -26,6 +26,7 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.HolidayExcludeUsersService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -62,6 +63,7 @@ public class HolidayInfoController {
     
 
     @GetMapping("/check/{workDate}")
+    @Operation(summary = "Check if a given date is a public holiday via LMS API")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> checkHoliday(@PathVariable String workDate) {
 
@@ -88,6 +90,7 @@ public class HolidayInfoController {
     }
 
     @GetMapping("/currentMonth")
+    @Operation(summary = "Get User Holidays for Current Month including public holidays and excluded holidays")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> getUserHolidays(
             @CurrentUser UserDTO currentUser) {

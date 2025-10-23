@@ -29,7 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
-@RequestMapping("/manager")
+@RequestMapping("/api/manager")
 @CrossOrigin(origins = "*",allowedHeaders = "*")
 public class ManagerTimeSheetController {
 
