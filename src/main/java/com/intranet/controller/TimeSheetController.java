@@ -1,6 +1,7 @@
 package com.intranet.controller;
 
 
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +33,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/timesheet")
+@CrossOrigin(origins = "*",allowedHeaders = "*")
 public class TimeSheetController {
 
     @Autowired

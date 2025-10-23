@@ -1,6 +1,7 @@
 package com.intranet.repository;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -12,5 +13,6 @@ public interface HolidayExcludeUsersRepo extends JpaRepository<HolidayExcludeUse
 
     boolean existsByUserIdAndManagerIdAndHolidayDate(Long userId, Long managerId, LocalDate holidayDate);
 
+    List<HolidayExcludeUsers> findByUserId(Long userId);
 }
 
