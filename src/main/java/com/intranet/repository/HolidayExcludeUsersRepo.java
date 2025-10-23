@@ -14,5 +14,7 @@ public interface HolidayExcludeUsersRepo extends JpaRepository<HolidayExcludeUse
     boolean existsByUserIdAndManagerIdAndHolidayDate(Long userId, Long managerId, LocalDate holidayDate);
 
     List<HolidayExcludeUsers> findByUserId(Long userId);
+
+    boolean existsByUserIdAndHolidayDate(Long id, LocalDate workDate);
 }
 

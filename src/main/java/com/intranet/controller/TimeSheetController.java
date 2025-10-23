@@ -10,23 +10,34 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
 import com.intranet.dto.WeekSummaryDTO;
+import com.intranet.repository.HolidayExcludeUsersRepo;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -39,6 +50,32 @@ public class TimeSheetController {
     @Autowired
     private TimeSheetService timeSheetService;
 
+    @Autowired
+    private HolidayExcludeUsersRepo holidayExcludeUsersRepo;
+
+    private HttpEntity<Void> buildEntityWithAuth() {
+
+    ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+    if (attrs == null) {
+        return (HttpEntity<Void>) HttpEntity.EMPTY;
+    }
+
+    HttpServletRequest request = attrs.getRequest();
+    String authHeader = request.getHeader("Authorization");
+
+    HttpHeaders headers = new HttpHeaders();
+    if (authHeader != null && !authHeader.isBlank()) {
+        headers.set("Authorization", authHeader);
+    }
+
+    return new HttpEntity<>(headers);
+    }
+
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Value("${lms.api.base-url}")
+    private String lmsBaseUrl;
+
     @PostMapping("/create")
     @Operation(summary = "Submit a new timesheet")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
@@ -48,18 +85,58 @@ public class TimeSheetController {
         @RequestBody List<TimeSheetEntryCreateDTO> entries) {
     
     try {
-        if (currentUser.getId() == null) 
-        return ResponseEntity.badRequest().body("User ID cannot be null");
+        // 🔹 Step 1: Basic validations
+        if (currentUser.getId() == null)
+            return ResponseEntity.badRequest().body("User ID cannot be null");
 
-        if (workDate == null) 
-        return ResponseEntity.badRequest().body("Work date cannot be null");
-       
+        if (workDate == null)
+            return ResponseEntity.badRequest().body("Work date cannot be null");
+
         if (entries == null || entries.isEmpty())
-        return ResponseEntity.badRequest().body("TimeSheet entries cannot be empty");
+            return ResponseEntity.badRequest().body("TimeSheet entries cannot be empty");
 
+        // 🔹 Step 2: Build auth headers
+        HttpEntity<Void> entity = buildEntityWithAuth();
+
+        // 🔹 Step 3: Check if the given date is a public holiday (via LMS API)
+        String holidayUrl = String.format("%s/api/holidays/check?date=%s", lmsBaseUrl, workDate);
+        boolean isPublicHoliday = false;
+        String holidayMessage = null;
+
+        try {
+            ResponseEntity<Map<String, Object>> holidayResponse = restTemplate.exchange(
+                    holidayUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {}
+            );
+
+            Map<String, Object> holidayBody = holidayResponse.getBody();
+            if (holidayBody != null && "yes".equalsIgnoreCase((String) holidayBody.get("status"))) {
+                isPublicHoliday = true;
+                holidayMessage = (String) holidayBody.get("message");
+            }
+
+        } catch (Exception e) {
+            System.err.println("⚠️ Holiday API check failed: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body("Unable to verify holiday status. Please try again later.");
+        }
+
+        // 🔹 Step 4: If it’s a holiday, verify if the user is allowed to submit
+        if (isPublicHoliday) {
+            boolean allowed = holidayExcludeUsersRepo
+                    .existsByUserIdAndHolidayDate(currentUser.getId(), workDate);
+
+            if (!allowed) {
+                return ResponseEntity.badRequest()
+                        .body("Cannot submit a timesheet because:" + holidayMessage);
+            }
+        }
+
+        // 🔹 Step 5: Proceed with normal timesheet creation
         String response = timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
         return ResponseEntity.ok().body(response);
-        }
+
+    }
+    
         catch(Exception e) {
             return ResponseEntity.badRequest().body("Failed to create timesheet");
         }
@@ -119,8 +196,6 @@ public class TimeSheetController {
     public ResponseEntity<String> updateEntries(@RequestBody TimeSheetUpdateRequest request) {
         String message = timeSheetService.updateEntries(request);
         return ResponseEntity.ok(message);
-}
-
-    
+    }
 
 }
