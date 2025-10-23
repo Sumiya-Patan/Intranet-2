@@ -11,12 +11,16 @@ import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.dto.external.ProjectWithUsersDTO;
 import com.intranet.dto.external.TaskDTO;
+import com.intranet.entity.HolidayExcludeUsers;
 import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
+import com.intranet.entity.TimeSheetOnHolidays;
 import com.intranet.entity.WeekInfo;
+import com.intranet.repository.HolidayExcludeUsersRepo;
 import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetEntryRepo;
+import com.intranet.repository.TimeSheetOnHolidaysRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
 
@@ -60,9 +64,16 @@ public class TimeSheetService {
     private final WeekInfoRepo weekInfoRepository;
     private final InternalProjectRepo internalProjectRepository;
     private final TimeSheetEntryRepo entryRepository;
+    private final HolidayExcludeUsersRepo holidayExcludeUsersRepository;
+    private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;
 
     @Transactional
     public String createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
+
+        // Step 1: check if user has holiday exclusion
+    Optional<HolidayExcludeUsers> excluded = holidayExcludeUsersRepository
+        .findByUserIdAndHolidayDate(userId, workDate);
+
         TimeSheet timeSheet = new TimeSheet();
         timeSheet.setUserId(userId);
         timeSheet.setWorkDate(workDate);
@@ -99,6 +110,16 @@ public class TimeSheetService {
 
         timeSheetRepository.save(timeSheet);
 
+        // Step 3: if excluded present → create TimeSheetOnHolidays record
+        if (excluded.isPresent()) {
+            TimeSheetOnHolidays tsh = new TimeSheetOnHolidays();
+            tsh.setTimeSheet(timeSheet);
+            tsh.setHolidayExcludeUser(excluded.get());
+            tsh.setIsHoliday(true);
+            tsh.setHolidayDate(workDate.atStartOfDay());
+            tsh.setDescription("Allowed to Submit on Holiday");
+            timeSheetOnHolidaysRepository.save(tsh);
+        }
         return "Timesheet created successfully";
     }
 

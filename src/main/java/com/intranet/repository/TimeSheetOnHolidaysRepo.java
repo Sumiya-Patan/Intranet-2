@@ -10,4 +10,6 @@ import com.intranet.entity.TimeSheetOnHolidays;
 @Repository
 public interface TimeSheetOnHolidaysRepo extends JpaRepository<TimeSheetOnHolidays, Long>{
 
+    boolean existsByTimeSheetId(Long id);
+
 }

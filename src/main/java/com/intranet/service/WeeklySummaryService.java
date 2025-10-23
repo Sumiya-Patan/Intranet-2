@@ -4,6 +4,7 @@ import com.intranet.dto.*;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
+import com.intranet.repository.TimeSheetOnHolidaysRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
 
@@ -135,6 +136,9 @@ public class WeeklySummaryService {
     @Value("${ums.api.base-url}")
     private String umsBaseUrl;
      private final RestTemplate restTemplate = new RestTemplate();
+
+    private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;
+    
     @Transactional
     public WeeklySummaryDTO getUserWeeklyTimeSheetHistory(Long userId) {
         LocalDate now = LocalDate.now();
@@ -262,6 +266,9 @@ public class WeeklySummaryService {
 
                     tsDTO.setActionStatus(actionStatusList);
                     tsDTO.setStatus(overallStatus);
+                    // 🔹 NEW: mark if it's a holiday timesheet
+                    boolean isHoliday = timeSheetOnHolidaysRepository.existsByTimeSheetId(ts.getId());
+                    tsDTO.setIsHolidayTimesheet(isHoliday);
                     sheetDTOs.add(tsDTO);
             }
 

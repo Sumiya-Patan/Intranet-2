@@ -12,6 +12,7 @@ public class TimeSheetSummaryDTO {
     private LocalDate workDate;
     private BigDecimal hoursWorked;
     private String status;
+    private Boolean isHolidayTimesheet;
     private List<TimeSheetEntrySummaryDTO> entries;
     private List<ActionStatusDTO> actionStatus;
 }
