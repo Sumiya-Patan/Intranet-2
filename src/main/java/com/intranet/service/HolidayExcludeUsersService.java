@@ -17,7 +17,9 @@ public class HolidayExcludeUsersService {
     public String createHolidayExclude(Long managerId,HolidayExcludeUsersRequestDTO request) {
 
         // Optionally: you can check if record already exists with same user, manager, and date
-
+        if (repository.existsByUserIdAndManagerIdAndHolidayDate(request.getUserId(), managerId, request.getHolidayDate())) {
+            throw new IllegalArgumentException("Holiday exclusion already exists for this user on the specified date");
+        }
         HolidayExcludeUsers entity = new HolidayExcludeUsers();
         entity.setUserId(request.getUserId());
         entity.setManagerId(managerId);

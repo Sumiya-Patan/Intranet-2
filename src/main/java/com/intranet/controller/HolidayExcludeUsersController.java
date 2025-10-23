@@ -22,8 +22,13 @@ public class HolidayExcludeUsersController {
     public ResponseEntity<String> createHolidayExclude(
         @CurrentUser UserDTO manager,
         @RequestBody HolidayExcludeUsersRequestDTO request) {
+        try{
         String created = service.createHolidayExclude(manager.getId(),request);
         return ResponseEntity.ok(created);
+        }
+        catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
     
 }
