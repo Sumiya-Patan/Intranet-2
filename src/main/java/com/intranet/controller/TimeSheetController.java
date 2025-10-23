@@ -19,6 +19,7 @@ import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
 import com.intranet.dto.WeekSummaryDTO;
+import com.intranet.entity.TimeSheet;
 import com.intranet.repository.HolidayExcludeUsersRepo;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
@@ -132,13 +133,17 @@ public class TimeSheetController {
         }
 
         // 🔹 Step 5: Proceed with normal timesheet creation
-        String response = timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
-        return ResponseEntity.ok().body(response);
+        TimeSheet response = timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
+        if (response != null)
+        return ResponseEntity.ok().body("Timesheet created successfully");
+        
+        else
+        return ResponseEntity.badRequest().body("Failed to create timesheet");
 
     }
-    
-        catch(Exception e) {
-            return ResponseEntity.badRequest().body("Failed to create timesheet");
+        
+        catch(IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
 
     }

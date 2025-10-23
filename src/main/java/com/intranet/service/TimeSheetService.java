@@ -68,11 +68,17 @@ public class TimeSheetService {
     private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;
 
     @Transactional
-    public String createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
+    public TimeSheet createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
 
         // Step 1: check if user has holiday exclusion
-    Optional<HolidayExcludeUsers> excluded = holidayExcludeUsersRepository
-        .findByUserIdAndHolidayDate(userId, workDate);
+        Optional<HolidayExcludeUsers> excluded = holidayExcludeUsersRepository
+            .findByUserIdAndHolidayDate(userId, workDate);
+
+        //check if timesheet already exists for user on that date
+        Optional<TimeSheet> existingTS = timeSheetRepository.findByUserIdAndWorkDate(userId, workDate);
+        if (existingTS.isPresent()) {
+          throw new IllegalArgumentException("Timesheet already exists for user on date: " + workDate);
+        }
 
         TimeSheet timeSheet = new TimeSheet();
         timeSheet.setUserId(userId);
@@ -120,7 +126,7 @@ public class TimeSheetService {
             tsh.setDescription("Allowed to Submit on Holiday");
             timeSheetOnHolidaysRepository.save(tsh);
         }
-        return "Timesheet created successfully";
+        return timeSheet;
     }
 
     private BigDecimal calculateHours(LocalDateTime from, LocalDateTime to) {
