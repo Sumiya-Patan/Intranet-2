@@ -1,0 +1,43 @@
+name: Deploy Timesheet App
+
+on:
+    push:
+        branches: ["main"]
+    workflow_dispatch:
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: "17"
+
+            - name: Build JAR
+              run: mvn clean install -DskipTests
+
+            - name: Upload to EC2
+              uses: appleboy/scp-action@v0.1.7
+              with:
+                  host: ${{ secrets.EC2_HOST }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  source: "target/TimeSheetManagement.jar"
+                  target: "${{ secrets.EC2_PATH }}/TimeSheetManagement.jar"
+
+            - name: Restart Service
+              uses: appleboy/ssh-action@v1.1.0
+              with:
+                  host: ${{ secrets.EC2_HOST }}
+                  username: ${{ secrets.EC2_USER }}
+                  key: ${{ secrets.EC2_SSH_KEY }}
+                  script: |
+                      sudo systemctl restart timesheet.service
+                      sleep 5
+                      sudo systemctl status timesheet.service --no-pager
