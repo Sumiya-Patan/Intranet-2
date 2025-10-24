@@ -50,7 +50,7 @@ jobs:
           source: "target/TimeSheetManagement.jar"            # exact file
           target: "${{ secrets.EC2_PATH }}/TimeSheetManagement.jar" # destination file
           rm: false
-          strip_components: 0
+          strip_components: 1
 
       # 7️⃣ Verify JAR on EC2
       - name: Verify JAR on EC2
