@@ -21,8 +21,10 @@ import com.intranet.repository.TimeSheetManagerSubmitRepo;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 @RestController
-@RequestMapping("/api/timesheet/manager-submit")
+@RequestMapping("/api/manager_submit")
 @CrossOrigin(origins = "*",allowedHeaders = "*")
 public class TimeSheetManagerSubmitController {
     
@@ -36,6 +38,7 @@ public class TimeSheetManagerSubmitController {
      * Manager submits timesheet for a user
      */
     @PostMapping("/submit")
+    @Operation(summary = "Manager submits timesheet for a user")
     @Transactional
     public ResponseEntity<?> submitTimeSheetForUser(
             @CurrentUser UserDTO manager,
