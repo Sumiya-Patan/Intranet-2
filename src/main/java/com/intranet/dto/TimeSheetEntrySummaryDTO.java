@@ -1,6 +1,7 @@
 package com.intranet.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import lombok.Data;
 
@@ -11,8 +12,8 @@ public class TimeSheetEntrySummaryDTO {
     private Long taskId;
     private String description;
     private String workLocation;
-    private String fromTime; // optional: formatted as HH:mm
-    private String toTime;   // optional: formatted as HH:mm
+    private LocalDateTime fromTime; // optional: formatted as HH:mm
+    private LocalDateTime toTime;   // optional: formatted as HH:mm
     private BigDecimal hoursWorked;
     private String otherDescription;
 }

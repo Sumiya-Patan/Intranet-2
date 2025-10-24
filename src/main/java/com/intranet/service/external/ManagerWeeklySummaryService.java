@@ -147,8 +147,8 @@ private TimeSheetSummaryDTO mapToSummaryDTOForManager(TimeSheet ts, Long manager
         dto.setTaskId(e.getTaskId());
         dto.setDescription(e.getDescription());
         dto.setWorkLocation(e.getWorkLocation());
-        dto.setFromTime(e.getFromTime() != null ? e.getFromTime().toLocalTime().toString() : null);
-        dto.setToTime(e.getToTime() != null ? e.getToTime().toLocalTime().toString() : null);
+        dto.setFromTime(e.getFromTime() != null ? e.getFromTime() : null);
+        dto.setToTime(e.getToTime() != null ? e.getToTime(): null);
         dto.setHoursWorked(e.getHoursWorked());
         dto.setOtherDescription(e.getOtherDescription());
         return dto;

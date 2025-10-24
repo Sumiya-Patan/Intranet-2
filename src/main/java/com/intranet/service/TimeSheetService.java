@@ -247,10 +247,10 @@ public class TimeSheetService {
         
         // Convert LocalDateTime to String format (HH:mm)
         if (entry.getFromTime() != null) {
-            summary.setFromTime(entry.getFromTime().toLocalTime().toString());
+            summary.setFromTime(entry.getFromTime());
         }
         if (entry.getToTime() != null) {
-            summary.setToTime(entry.getToTime().toLocalTime().toString());
+            summary.setToTime(entry.getToTime());
         }
         
         summary.setHoursWorked(entry.getHoursWorked());
