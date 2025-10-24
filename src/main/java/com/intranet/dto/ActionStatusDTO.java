@@ -10,5 +10,5 @@ import lombok.NoArgsConstructor;
 public class ActionStatusDTO {
     private Long approverId;
     private String approverName;
-    private String status;  // APPROVED / REJECTED etc.
+    private String status; 
 }

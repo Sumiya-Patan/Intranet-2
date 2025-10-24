@@ -1,8 +1,8 @@
 package com.intranet.dto.external;
 
-import java.util.List;
 
-import com.intranet.dto.UserSDTO;
+
+// import com.intranet.dto.UserSDTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,5 +14,5 @@ import lombok.NoArgsConstructor;
 public class ProjectWithUsersDTO {
     private Long projectId;
     private String projectName;
-    private List<UserSDTO> users;
+    // private List<UserSDTO> users;
 }

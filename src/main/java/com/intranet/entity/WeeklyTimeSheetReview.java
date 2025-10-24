@@ -1,45 +1,43 @@
 package com.intranet.entity;
 
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 @Entity
-@Table(name = "timesheet_review")
+@Table(name = "weekly_timesheet_review")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class TimeSheetReview {
+public class WeeklyTimeSheetReview {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    
-    private Long userId;
-    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "week_info_id")
     private WeekInfo weekInfo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "timesheet_id")
-    private TimeSheet timeSheet; // Optional - for daily reviews
 
-    private Long managerId;
+    @Column(nullable = false)
+    private Long userId; // link who submitted this week
+
+    @Column(nullable = false)
+    private java.time.LocalDateTime submittedAt; // when it was submitted
+
 
     @Enumerated(EnumType.STRING)
     private Status status;
 
-    private String comments;
-    private LocalDateTime reviewedAt;
-
     public enum Status {
-        APPROVED, REJECTED
+        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED, SUBMITTED
     }
 
+    @Column
+    private LocalDateTime reviewedAt; // when it was reviewed
 }

@@ -1,24 +1,17 @@
 package com.intranet.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class TimeSheetEntryCreateRequestDTO {
+public class TimeSheetEntryCreateDTO {
     private Long projectId;
     private Long taskId;
     private String description;
-    private String workType;
-    // private String workLocation;
-    private Boolean isBillable;
-    private BigDecimal hoursWorked;
+    private String workLocation;
     private LocalDateTime fromTime;
     private LocalDateTime toTime;
+    private BigDecimal hoursWorked; 
     private String otherDescription;
 }

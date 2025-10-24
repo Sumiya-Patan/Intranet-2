@@ -1,17 +1,32 @@
 package com.intranet.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.DayOfWeek;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
+import com.intranet.dto.AddEntryDTO;
+import com.intranet.dto.DeleteTimeSheetEntriesRequest;
+import com.intranet.dto.TimeSheetEntryCreateDTO;
+import com.intranet.dto.TimeSheetSummaryDTO;
+import com.intranet.dto.TimeSheetUpdateRequest;
+import com.intranet.dto.TimeSheetEntrySummaryDTO;
+import com.intranet.dto.WeekSummaryDTO;
+import com.intranet.dto.external.ManagerUserMappingDTO;
+import com.intranet.dto.external.ProjectTaskView;
+import com.intranet.dto.external.ProjectWithUsersDTO;
+import com.intranet.dto.external.TaskDTO;
+import com.intranet.entity.HolidayExcludeUsers;
+import com.intranet.entity.InternalProject;
+import com.intranet.entity.TimeSheet;
+import com.intranet.entity.TimeSheetEntry;
+import com.intranet.entity.TimeSheetOnHolidays;
+import com.intranet.entity.WeekInfo;
+import com.intranet.repository.HolidayExcludeUsersRepo;
+import com.intranet.repository.InternalProjectRepo;
+import com.intranet.repository.TimeSheetEntryRepo;
+import com.intranet.repository.TimeSheetOnHolidaysRepo;
+import com.intranet.repository.TimeSheetRepo;
+import com.intranet.repository.WeekInfoRepo;
+
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -20,437 +35,335 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import com.intranet.dto.ActionStatusDTO;
-import com.intranet.dto.TimeSheetEntryCreateRequestDTO;
-import com.intranet.dto.TimeSheetEntryDTO;
-import com.intranet.dto.TimeSheetEntryResponseDTO;
-import com.intranet.dto.TimeSheetEntryUpdateDTO;
-import com.intranet.dto.TimeSheetResponseDTO;
-import com.intranet.dto.TimeSheetUpdateRequestDTO;
-import com.intranet.dto.UserSDTO;
-import com.intranet.dto.external.ManagerUserMappingDTO;
-import com.intranet.dto.external.ProjectTaskView;
-import com.intranet.dto.external.ProjectWithUsersDTO;
-import com.intranet.dto.external.TaskDTO;
-import com.intranet.entity.InternalProject;
-import com.intranet.entity.TimeSheet;
-import com.intranet.entity.TimeSheetEntry;
-import com.intranet.entity.TimeSheetReview;
-import com.intranet.repository.InternalProjectRepo;
-import com.intranet.repository.TimeSheetEntryRepo;
-import com.intranet.repository.TimeSheetRepo;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.transaction.Transactional;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.WeekFields;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class TimeSheetService {
 
-    @Autowired
-    private TimeSheetRepo timeSheetRepository;
-
-    @Autowired
-    private TimeSheetEntryRepo timeSheetEntryRepository;
-
-    @Autowired
-    private InternalProjectRepo internalProjectRepository;
-    
-  public void createTimeSheetWithEntries(
-        Long userId,
-        LocalDate workDate,
-        List<TimeSheetEntryDTO> entriesDto) {
-
-    // 🔹 Step 1: Calculate hours if from/to time is provided
-    for (TimeSheetEntryDTO dto : entriesDto) {
-        if (dto.getFromTime() != null && dto.getToTime() != null) {
-            long minutes = Duration.between(dto.getFromTime(), dto.getToTime()).toMinutes();
-            dto.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
-        } else if (dto.getHoursWorked() == null) {
-            dto.setHoursWorked(BigDecimal.ZERO);
-        }
-    }
-
-    // 🔹 Step 2: Create TimeSheet
-    TimeSheet timesheet = new TimeSheet();
-    timesheet.setUserId(userId);
-    timesheet.setWorkDate(workDate);
-
-    // 🔹 Step 3: Create and attach entries
-    List<TimeSheetEntry> entries = new ArrayList<>();
-    for (TimeSheetEntryDTO dto : entriesDto) {
-        TimeSheetEntry entry = new TimeSheetEntry();
-        entry.setTimeSheet(timesheet);
-        entry.setProjectId(dto.getProjectId());
-        entry.setTaskId(dto.getTaskId());
-        entry.setDescription(dto.getDescription());
-        // entry.setWorkLocation(dto.getWorkLocation());
-        entry.setIsBillable(dto.getIsBillable());
-        entry.setWorkType(dto.getWorkType());
-        entry.setFromTime(dto.getFromTime());
-        entry.setToTime(dto.getToTime());
-        entry.setHoursWorked(dto.getHoursWorked());
-        entry.setOtherDescription(dto.getOtherDescription());
-
-        entries.add(entry);
-    }
-    timesheet.setEntries(entries);
-
-    timeSheetRepository.save(timesheet);
-    }
-    
-    public List<TimeSheetResponseDTO> getUserTimeSheetHistory(Long userId) {
-    List<TimeSheet> timesheets = timeSheetRepository.findByUserIdOrderByWorkDateDesc(userId);
-    if (timesheets.isEmpty()) return Collections.emptyList();
-
-    // ✅ Step 1: Fetch internal projects
-    List<InternalProject> internalProjects = internalProjectRepository.findAll();
-    Map<Long, Map<String, Object>> combinedProjectMap = new HashMap<>();
-
-    for (InternalProject ip : internalProjects) {
-        Map<String, Object> internalMap = new HashMap<>();
-        internalMap.put("id", ip.getProjectId());
-        internalMap.put("name", ip.getProjectName());
-        combinedProjectMap.put(ip.getProjectId().longValue(), internalMap);
-    }
-
-    // ✅ Step 2: Fetch PMS projects
-    String projectsUrl = String.format("%s/projects", pmsBaseUrl);
-    ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
-            projectsUrl,
-            HttpMethod.GET,
-            buildEntityWithAuth(),
-            new ParameterizedTypeReference<>() {}
-    );
-    List<Map<String, Object>> projects = projectResponse.getBody();
-
-    if (projects != null) {
-        for (Map<String, Object> p : projects) {
-            Long projectId = ((Number) p.get("id")).longValue();
-            combinedProjectMap.putIfAbsent(projectId, p);
-        }
-    }
-
-    // ✅ Step 3: Map timesheets → DTOs
-    return timesheets.stream().map(ts -> {
-        TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
-        dto.setTimesheetId(ts.getTimesheetId());
-        dto.setUserId(ts.getUserId());
-        dto.setWorkDate(ts.getWorkDate());
-
-        // ✅ Map entries
-        List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
-            TimeSheetEntryResponseDTO entryDto = new TimeSheetEntryResponseDTO();
-            entryDto.setTimesheetEntryId(entry.getTimesheetEntryId());
-            entryDto.setProjectId(entry.getProjectId());
-            entryDto.setTaskId(entry.getTaskId());
-            entryDto.setDescription(entry.getDescription());
-            entryDto.setWorkType(entry.getWorkType());
-            entryDto.setIsBillable(entry.getIsBillable());
-            entryDto.setFromTime(entry.getFromTime());
-            entryDto.setToTime(entry.getToTime());
-            entryDto.setHoursWorked(entry.getHoursWorked());
-            entryDto.setOtherDescription(entry.getOtherDescription());
-            return entryDto;
-        }).toList();
-        dto.setEntries(entries);
-
-        // ✅ Step 4: Build actionStatus list (manager or mock)
-        List<ActionStatusDTO> actionStatusList = new ArrayList<>();
-        for (TimeSheetEntry entry : ts.getEntries()) {
-            Map<String, Object> project = combinedProjectMap.get(entry.getProjectId());
-            if (project == null) continue;
-
-            Map<String, Object> owner = (Map<String, Object>) project.get("owner");
-            if (owner == null) continue;
-
-            Long managerId = ((Number) owner.get("id")).longValue();
-            String managerName = (String) owner.get("name");
-
-            Optional<TimeSheetReview> reviewOpt = ts.getReviews().stream()
-                    .filter(r -> r.getManagerId().equals(managerId))
-                    .findFirst();
-
-            String action = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
-
-            boolean exists = actionStatusList.stream()
-                    .anyMatch(a -> a.getApproverId().equals(managerId));
-            if (!exists) {
-                actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
-            }
-        }
-
-        // ✅ Step 5: Add mock supervisor if no approvers
-        if (actionStatusList.isEmpty()) {
-            actionStatusList.add(new ActionStatusDTO(1L, "Supervisor Mock", "Pending"));
-            dto.setStatus("Pending");
-        } else {
-            boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
-            boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-            boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-            boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
-
-            if (anyRejected) dto.setStatus("Rejected");
-            else if (allApproved) dto.setStatus("Approved");
-            else if (anyApproved) dto.setStatus("Partially Approved");
-            else if (allPending) dto.setStatus("Pending");
-            else dto.setStatus("Pending");
-        }
-
-        dto.setActionStatus(actionStatusList);
-        return dto;
-    }).toList();
-    }
-
-
-    public List<TimeSheetResponseDTO> getUserTimeSheetHistoryByDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
-    List<TimeSheet> timesheets = timeSheetRepository
-            .findByUserIdAndWorkDateBetweenOrderByWorkDateDesc(userId, startDate, endDate);
-
-    if (timesheets.isEmpty()) return Collections.emptyList();
-
-    // ✅ Fetch projects
-    String projectsUrl = String.format("%s/projects", pmsBaseUrl);
-    ResponseEntity<List<Map<String, Object>>> projectResponse = restTemplate.exchange(
-            projectsUrl,
-            HttpMethod.GET,
-            buildEntityWithAuth(),
-            new ParameterizedTypeReference<>() {}
-    );
-    List<Map<String, Object>> projects = projectResponse.getBody();
-
-    final Map<Long, Map<String, Object>> projectMap = (projects != null)
-            ? projects.stream().collect(Collectors.toMap(
-                p -> ((Number) p.get("id")).longValue(),
-                p -> p
-            ))
-            : new HashMap<>();
-
-    return timesheets.stream().map(ts -> {
-        TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
-        dto.setTimesheetId(ts.getTimesheetId());
-        dto.setUserId(ts.getUserId());
-        dto.setWorkDate(ts.getWorkDate());
-
-        // ✅ Map entries
-        List<TimeSheetEntryResponseDTO> entries = ts.getEntries().stream().map(entry -> {
-            TimeSheetEntryResponseDTO entryDto = new TimeSheetEntryResponseDTO();
-            entryDto.setTimesheetEntryId(entry.getTimesheetEntryId());
-            entryDto.setProjectId(entry.getProjectId());
-            entryDto.setTaskId(entry.getTaskId());
-            entryDto.setDescription(entry.getDescription());
-            entryDto.setWorkType(entry.getWorkType());
-            entryDto.setIsBillable(entry.getIsBillable());
-            entryDto.setFromTime(entry.getFromTime());
-            entryDto.setToTime(entry.getToTime());
-            entryDto.setHoursWorked(entry.getHoursWorked());
-            entryDto.setOtherDescription(entry.getOtherDescription());
-            return entryDto;
-        }).toList();
-        dto.setEntries(entries);
-
-        // ✅ Build action status
-        List<ActionStatusDTO> actionStatusList = new ArrayList<>();
-        for (TimeSheetEntry entry : ts.getEntries()) {
-            Map<String, Object> project = projectMap.get(entry.getProjectId());
-            if (project == null) continue;
-
-            Map<String, Object> owner = (Map<String, Object>) project.get("owner");
-            if (owner == null) continue;
-
-            Long managerId = ((Number) owner.get("id")).longValue();
-            String managerName = (String) owner.get("name");
-
-            Optional<TimeSheetReview> reviewOpt = ts.getReviews().stream()
-                    .filter(r -> r.getManagerId().equals(managerId))
-                    .findFirst();
-
-            String action = reviewOpt.map(TimeSheetReview::getAction).orElse("Pending");
-
-            boolean exists = actionStatusList.stream()
-                    .anyMatch(a -> a.getApproverId().equals(managerId));
-            if (!exists) {
-                actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
-            }
-        }
-
-        // ✅ Add mock supervisor if empty
-        if (actionStatusList.isEmpty()) {
-            actionStatusList.add(new ActionStatusDTO(1L, "Supervisor Mock", "Pending"));
-            dto.setStatus("Pending");
-        } else {
-            boolean anyRejected = actionStatusList.stream().anyMatch(a -> "Rejected".equalsIgnoreCase(a.getStatus()));
-            boolean allApproved = actionStatusList.stream().allMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-            boolean anyApproved = actionStatusList.stream().anyMatch(a -> "Approved".equalsIgnoreCase(a.getStatus()));
-            boolean allPending = actionStatusList.stream().allMatch(a -> "Pending".equalsIgnoreCase(a.getStatus()));
-
-            if (anyRejected) dto.setStatus("Rejected");
-            else if (allApproved) dto.setStatus("Approved");
-            else if (anyApproved) dto.setStatus("Partially Approved");
-            else if (allPending) dto.setStatus("Pending");
-            else dto.setStatus("Pending");
-        }
-
-        dto.setActionStatus(actionStatusList);
-        return dto;
-    }).toList();
-    }
-
+    private final TimeSheetRepo timeSheetRepository;
+    private final WeekInfoRepo weekInfoRepository;
+    private final InternalProjectRepo internalProjectRepository;
+    private final TimeSheetEntryRepo entryRepository;
+    private final HolidayExcludeUsersRepo holidayExcludeUsersRepository;
+    private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;
 
     @Transactional
-    public void partialUpdateTimesheet(Long timesheetId, TimeSheetUpdateRequestDTO dto) {
-    TimeSheet timesheet = timeSheetRepository.findById(timesheetId)
-            .orElseThrow(() -> new IllegalArgumentException("Timesheet not found"));
+    public TimeSheet createTimeSheet(Long userId, LocalDate workDate, List<TimeSheetEntryCreateDTO> entriesDTO) {
 
-    // 🗓 Update workDate if provided
-    if (dto.getWorkDate() != null) {
-        timesheet.setWorkDate(dto.getWorkDate());
-    }
+        // Step 1: check if user has holiday exclusion
+        Optional<HolidayExcludeUsers> excluded = holidayExcludeUsersRepository
+            .findByUserIdAndHolidayDate(userId, workDate);
 
-    // 🔄 Update entries
-    if (dto.getEntries() != null && !dto.getEntries().isEmpty()) {
-        for (TimeSheetEntryUpdateDTO entryDto : dto.getEntries()) {
-            TimeSheetEntry entry = timeSheetEntryRepository.findById(entryDto.getTimesheetEntryId())
-                    .orElseThrow(() -> new IllegalArgumentException("Entry not found with ID: " + entryDto.getTimesheetEntryId()));
+        //check if timesheet already exists for user on that date
+        Optional<TimeSheet> existingTS = timeSheetRepository.findByUserIdAndWorkDate(userId, workDate);
+        if (existingTS.isPresent()) {
+          throw new IllegalArgumentException("Timesheet already exists for user on date: " + workDate);
+        }
 
-            if (entryDto.getProjectId() != null) entry.setProjectId(entryDto.getProjectId());
-            if (entryDto.getTaskId() != null) entry.setTaskId(entryDto.getTaskId());
-            if (entryDto.getDescription() != null) entry.setDescription(entryDto.getDescription());
-            if (entryDto.getWorkType() != null) entry.setWorkType(entryDto.getWorkType());
-            // if (entryDto.getWorkLocation() != null) entry.setWorkLocation(entryDto.getWorkLocation());
-            if (entryDto.getIsBillable() != null) entry.setIsBillable(entryDto.getIsBillable());
-            if (entryDto.getFromTime() != null) entry.setFromTime(entryDto.getFromTime());
-            if (entryDto.getToTime() != null) entry.setToTime(entryDto.getToTime());
-            if (entryDto.getOtherDescription() != null) entry.setOtherDescription(entryDto.getOtherDescription());
+        TimeSheet timeSheet = new TimeSheet();
+        timeSheet.setUserId(userId);
+        timeSheet.setWorkDate(workDate);
+        timeSheet.setCreatedAt(LocalDateTime.now());
+        timeSheet.setUpdatedAt(LocalDateTime.now());
+        timeSheet.setStatus(TimeSheet.Status.DRAFT);
 
-            // 🕒 Calculate hours if both from/to time provided
-            if (entryDto.getFromTime() != null && entryDto.getToTime() != null) {
-                long minutes = Duration.between(entryDto.getFromTime(), entryDto.getToTime()).toMinutes();
-                entry.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
-            } else if (entryDto.getHoursWorked() != null) {
-                entry.setHoursWorked(entryDto.getHoursWorked());
+        WeekInfo weekInfo = findOrCreateWeekInfo(workDate);
+        timeSheet.setWeekInfo(weekInfo);
+
+        List<TimeSheetEntry> entries = entriesDTO.stream().map(dto -> {
+            TimeSheetEntry entry = new TimeSheetEntry();
+            entry.setTimeSheet(timeSheet);
+            entry.setProjectId(dto.getProjectId());
+            entry.setTaskId(dto.getTaskId());
+            entry.setDescription(dto.getDescription());
+            entry.setWorkLocation(dto.getWorkLocation());
+            entry.setFromTime(dto.getFromTime());
+            entry.setToTime(dto.getToTime());
+            entry.setOtherDescription(dto.getOtherDescription());
+
+            BigDecimal hours = dto.getHoursWorked();
+            if (hours == null) {
+                hours = calculateHours(dto.getFromTime(), dto.getToTime());
             }
-
-            timeSheetEntryRepository.save(entry);
-        }
-    }
-    timesheet.setUpdatedAt(LocalDateTime.now());
-    timeSheetRepository.save(timesheet);
-}
-        
-    public TimeSheetResponseDTO getTimeSheetById(Long id) {
-        TimeSheet timeSheet = timeSheetRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Timesheet not found with id: " + id));
-
-        TimeSheetResponseDTO dto = new TimeSheetResponseDTO();
-        dto.setTimesheetId(timeSheet.getTimesheetId());
-        dto.setUserId(timeSheet.getUserId());
-        dto.setWorkDate(timeSheet.getWorkDate());
-        dto.setStatus(timeSheet.getStatus());
-
-        List<TimeSheetEntryResponseDTO> entryDTOs = timeSheet.getEntries().stream().map(entry -> {
-            TimeSheetEntryResponseDTO entryDTO = new TimeSheetEntryResponseDTO();
-            entryDTO.setTimesheetEntryId(entry.getTimesheetEntryId());
-            entryDTO.setProjectId(entry.getProjectId());
-            entryDTO.setTaskId(entry.getTaskId());
-            entryDTO.setDescription(entry.getDescription());
-            entryDTO.setWorkType(entry.getWorkType());
-            // entryDTO.setWorkLocation(entry.getWorkLocation());
-            entryDTO.setIsBillable(entry.getIsBillable());
-            entryDTO.setFromTime(entry.getFromTime());
-            entryDTO.setToTime(entry.getToTime());
-            if (entryDTO.getFromTime() != null && entryDTO.getToTime() != null) {
-            long minutes = Duration.between(entryDTO.getFromTime(), entryDTO.getToTime()).toMinutes();
-            entryDTO.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
-        } else if (entryDTO.getHoursWorked() == null) {
-            entryDTO.setHoursWorked(BigDecimal.ZERO);
-        }
-            entryDTO.setOtherDescription(entry.getOtherDescription());
-            return entryDTO;
+            entry.setHoursWorked(hours);
+            return entry;
         }).collect(Collectors.toList());
 
-        dto.setEntries(entryDTOs);
+        timeSheet.setEntries(entries);
+        timeSheet.setHoursWorked(entries.stream()
+                .map(TimeSheetEntry::getHoursWorked)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
 
-        return dto;
+        timeSheetRepository.save(timeSheet);
+
+        // Step 3: if excluded present → create TimeSheetOnHolidays record
+        if (excluded.isPresent()) {
+            TimeSheetOnHolidays tsh = new TimeSheetOnHolidays();
+            tsh.setTimeSheet(timeSheet);
+            tsh.setHolidayExcludeUser(excluded.get());
+            tsh.setIsHoliday(true);
+            tsh.setHolidayDate(workDate.atStartOfDay());
+            tsh.setDescription("Allowed to Submit on Holiday");
+            timeSheetOnHolidaysRepository.save(tsh);
+        }
+        return timeSheet;
+    }
+
+    private BigDecimal calculateHours(LocalDateTime from, LocalDateTime to) {
+    if (from == null || to == null) return BigDecimal.ZERO;
+    if (to.isBefore(from)) throw new IllegalArgumentException("toTime cannot be before fromTime");
+
+    Duration duration = Duration.between(from, to);
+    long hours = duration.toHours();
+    long minutes = duration.toMinutes() % 60;
+
+    // Format as HH.MM where minutes are two digits
+    String hhmm = String.format("%02d.%02d", hours, minutes);
+    return new BigDecimal(hhmm);
     }
 
 
-    public ResponseEntity<String> addEntriesToTimeSheet(Long timesheetId, List<TimeSheetEntryCreateRequestDTO> newEntries) {
-    Optional<TimeSheet> optional = timeSheetRepository.findById(timesheetId);
-    if (optional.isEmpty()) {
-        return ResponseEntity.badRequest().body("Timesheet not found");
+    private WeekInfo findOrCreateWeekInfo(LocalDate workDate) {
+        return weekInfoRepository.findByStartDateLessThanEqualAndEndDateGreaterThanEqual(workDate, workDate)
+                .orElseGet(() -> createWeekInfo(workDate));
     }
 
-    TimeSheet timeSheet = optional.get();
-    if (timeSheet.getStatus().equalsIgnoreCase("Approved")) {    
-        return ResponseEntity.badRequest().body("Cannot add entries to an approved timesheet");
+    private WeekInfo createWeekInfo(LocalDate date) {
+        LocalDate startOfWeek = date.with(java.time.DayOfWeek.MONDAY);
+        LocalDate endOfWeek = date.with(java.time.DayOfWeek.SUNDAY);
+
+        WeekInfo weekInfo = new WeekInfo();
+        weekInfo.setStartDate(startOfWeek);
+        weekInfo.setEndDate(endOfWeek);
+        weekInfo.setWeekNo(startOfWeek.get(WeekFields.ISO.weekOfYear()));
+        weekInfo.setYear(startOfWeek.getYear());
+        weekInfo.setMonth(startOfWeek.getMonthValue());
+        weekInfo.setIncompleteWeek(false);
+
+        return weekInfoRepository.save(weekInfo);
     }
 
-    
-
-    for (TimeSheetEntryCreateRequestDTO dto : newEntries) {
-        if (dto.getFromTime() == null || dto.getToTime() == null || dto.getToTime().isBefore(dto.getFromTime())) {
-            return ResponseEntity.badRequest().body("Invalid fromTime/toTime for entry");
+    /**
+     * Get timesheets grouped by week for a given date range
+     */
+    public List<WeekSummaryDTO> getTimesheetsByDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("Start date and end date cannot be null");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date cannot be after end date");
         }
 
-        // // Check overlap with existing entries
-        // boolean overlapsExisting = existingEntries.stream().anyMatch(e ->
-        //     timesOverlap(e.getFromTime(), e.getToTime(), dto.getFromTime(), dto.getToTime())
-        // );
-        // if (overlapsExisting) {
-        //     return ResponseEntity.badRequest().body("New entry overlaps with an existing entry");
-        // }
+        // Get all timesheets within the date range with weekInfo and entries eagerly loaded
+        List<TimeSheet> timesheets = timeSheetRepository.findByWorkDateBetweenWithWeekInfoAndEntries(startDate, endDate);
+        
+        if (timesheets.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // Get all week infos within the date range
+        List<WeekInfo> weekInfos = weekInfoRepository.findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(
+            startDate, endDate);
+        
+        // Group timesheets by week - handle null weekInfo
+        Map<Long, List<TimeSheet>> timesheetsByWeek = timesheets.stream()
+            .filter(ts -> ts.getWeekInfo() != null) // Filter out timesheets without weekInfo
+            .collect(Collectors.groupingBy(ts -> ts.getWeekInfo().getId()));
+        
+        // Create WeekSummaryDTO for each week
+        List<WeekSummaryDTO> weekSummaries = new ArrayList<>();
+        
+        for (WeekInfo weekInfo : weekInfos) {
+            List<TimeSheet> weekTimesheets = timesheetsByWeek.getOrDefault(weekInfo.getId(), new ArrayList<>());
+            
+            WeekSummaryDTO weekSummary = new WeekSummaryDTO();
+            weekSummary.setWeekId(weekInfo.getId());
+            weekSummary.setStartDate(weekInfo.getStartDate());
+            weekSummary.setEndDate(weekInfo.getEndDate());
+            
+            // Calculate total hours for the week
+            BigDecimal totalHours = weekTimesheets.stream()
+                .map(TimeSheet::getHoursWorked)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            weekSummary.setTotalHours(totalHours);
+            
+            // Convert timesheets to DTOs
+            List<TimeSheetSummaryDTO> timesheetSummaries = weekTimesheets.stream()
+                .map(this::convertToTimeSheetSummaryDTO)
+                .collect(Collectors.toList());
+            weekSummary.setTimesheets(timesheetSummaries);
+            
+            weekSummaries.add(weekSummary);
+        }
+        
+        // Sort by start date
+        weekSummaries.sort(Comparator.comparing(WeekSummaryDTO::getStartDate));
+        
+        return weekSummaries;
+    }
+    
+    private TimeSheetSummaryDTO convertToTimeSheetSummaryDTO(TimeSheet timesheet) {
+        TimeSheetSummaryDTO summary = new TimeSheetSummaryDTO();
+        summary.setTimesheetId(timesheet.getId());
+        summary.setWorkDate(timesheet.getWorkDate());
+        summary.setHoursWorked(timesheet.getHoursWorked());
+        
+        // Convert entries to DTOs
+        List<TimeSheetEntrySummaryDTO> entrySummaries = timesheet.getEntries().stream()
+            .map(this::convertToTimeSheetEntrySummaryDTO)
+            .collect(Collectors.toList());
+        summary.setEntries(entrySummaries);
+        
+        return summary;
+    }
+    
+    private TimeSheetEntrySummaryDTO convertToTimeSheetEntrySummaryDTO(TimeSheetEntry entry) {
+        TimeSheetEntrySummaryDTO summary = new TimeSheetEntrySummaryDTO();
+        summary.setProjectId(entry.getProjectId());
+        summary.setTaskId(entry.getTaskId());
+        summary.setDescription(entry.getDescription());
+        summary.setWorkLocation(entry.getWorkLocation());
+        
+        // Convert LocalDateTime to String format (HH:mm)
+        if (entry.getFromTime() != null) {
+            summary.setFromTime(entry.getFromTime());
+        }
+        if (entry.getToTime() != null) {
+            summary.setToTime(entry.getToTime());
+        }
+        
+        summary.setHoursWorked(entry.getHoursWorked());
+        summary.setOtherDescription(entry.getOtherDescription());
+        return summary;
+    }
+    
+    /**
+     * Debug method to get all timesheets in the database
+     */
+    public List<Map<String, Object>> debugGetAllTimesheets() {
+        List<TimeSheet> allTimesheets = timeSheetRepository.findAll();
+        
+        return allTimesheets.stream().map(ts -> {
+            Map<String, Object> debugInfo = new HashMap<>();
+            debugInfo.put("id", ts.getId());
+            debugInfo.put("userId", ts.getUserId());
+            debugInfo.put("workDate", ts.getWorkDate());
+            debugInfo.put("hoursWorked", ts.getHoursWorked());
+            debugInfo.put("status", ts.getStatus());
+            debugInfo.put("weekInfoId", ts.getWeekInfo() != null ? ts.getWeekInfo().getId() : null);
+            debugInfo.put("weekInfoStartDate", ts.getWeekInfo() != null ? ts.getWeekInfo().getStartDate() : null);
+            debugInfo.put("weekInfoEndDate", ts.getWeekInfo() != null ? ts.getWeekInfo().getEndDate() : null);
+            debugInfo.put("entriesCount", ts.getEntries() != null ? ts.getEntries().size() : 0);
+            debugInfo.put("createdAt", ts.getCreatedAt());
+            return debugInfo;
+        }).collect(Collectors.toList());
+    }
 
-        // Check overlap with other new entries in batch
-        boolean overlapsNewEntries = newEntries.stream()
-                .filter(other -> other != dto)
-                .anyMatch(other -> timesOverlap(other.getFromTime(), other.getToTime(), dto.getFromTime(), dto.getToTime()));
-        if (overlapsNewEntries) {
-            return ResponseEntity.badRequest().body("New entries in the batch overlap with each other");
+    public String addEntriesToTimeSheet(AddEntryDTO addEntryDTO) {
+        Long timesheetId = addEntryDTO.getTimeSheetId();
+
+        if (timesheetId == null) {
+            return "timeSheetId is required in the request body";
         }
 
-        // Create entry
-        TimeSheetEntry entry = new TimeSheetEntry();
-        entry.setTimeSheet(timeSheet);
-        entry.setProjectId(dto.getProjectId());
-        entry.setTaskId(dto.getTaskId());
-        entry.setDescription(dto.getDescription());
-        entry.setWorkType(dto.getWorkType());
-        entry.setIsBillable(dto.getIsBillable());
-        entry.setFromTime(dto.getFromTime());
-        entry.setToTime(dto.getToTime());
+        Optional<TimeSheet> optionalTimeSheet = timeSheetRepository.findById(timesheetId);
 
-        // ✅ Convert duration to HH.mm format
-        Duration duration = Duration.between(dto.getFromTime(), dto.getToTime());
-        long hoursPart = duration.toHours();
-        long minutesPart = duration.toMinutes() % 60;
+        if (optionalTimeSheet.isEmpty()) {
+            return "No timesheet found with id: " + timesheetId;
+        }
 
-        BigDecimal hoursWorked = new BigDecimal(hoursPart + "." + String.format("%02d", minutesPart));
-        entry.setHoursWorked(hoursWorked);
+        TimeSheet timeSheet = optionalTimeSheet.get();
 
-        entry.setOtherDescription(dto.getOtherDescription());
-        timeSheet.getEntries().add(entry);
+        if (addEntryDTO.getEntries() == null || addEntryDTO.getEntries().isEmpty()) {
+            return "No entries provided to add";
+        }
+
+        // Add each entry
+        for (TimeSheetEntryCreateDTO entryDTO : addEntryDTO.getEntries()) {
+            TimeSheetEntry entry = new TimeSheetEntry();
+            entry.setTimeSheet(timeSheet);
+            entry.setProjectId(entryDTO.getProjectId());
+            entry.setTaskId(entryDTO.getTaskId());
+            entry.setDescription(entryDTO.getDescription());
+            entry.setFromTime(entryDTO.getFromTime());
+            entry.setToTime(entryDTO.getToTime());
+            entry.setWorkLocation(entryDTO.getWorkLocation());
+            entry.setHoursWorked(entryDTO.getHoursWorked());
+            entry.setOtherDescription(entryDTO.getOtherDescription());
+
+            timeSheet.getEntries().add(entry);
+        }
+
+        // Recalculate total hours
+        timeSheet.setHoursWorked(
+            timeSheet.getEntries().stream()
+                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : java.math.BigDecimal.ZERO)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
+        );
+
+        timeSheet.setUpdatedAt(LocalDateTime.now());
+
+        timeSheetRepository.save(timeSheet);
+
+        return "Entries added successfully. Total hours now: " + timeSheet.getHoursWorked();
     }
 
-    timeSheet.setUpdatedAt(LocalDateTime.now());
-    timeSheet.setStatus("Pending");
-    timeSheetRepository.save(timeSheet);
+    @Transactional
+    public String deleteEntries(DeleteTimeSheetEntriesRequest request) {
+        TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
+                .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
 
-    return ResponseEntity.ok("Entries added successfully");
+        // Filter entries that belong to this timesheet and need to be deleted
+        List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()
+                .filter(e -> request.getEntryIds().contains(e.getId()))
+                .toList();
+
+        if (entriesToDelete.isEmpty()) {
+            return "No matching entries found to delete.";
+        }
+
+        // Remove entries
+        timeSheet.getEntries().removeAll(entriesToDelete);
+        entryRepository.deleteAll(entriesToDelete);
+
+        // If all entries deleted, delete timesheet itself
+        if (timeSheet.getEntries().isEmpty()) {
+            timeSheetRepository.delete(timeSheet);
+            return "All entries deleted. TimeSheet also removed.";
+        }
+
+        // Recalculate total hours
+        BigDecimal totalHours = timeSheet.getEntries().stream()
+                .map(TimeSheetEntry::getHoursWorked)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        timeSheet.setHoursWorked(totalHours);
+
+        timeSheetRepository.save(timeSheet);
+
+        return "Selected entries deleted. Total hours now: " + totalHours;
     }
 
-    /** Returns true if two time intervals overlap. */
-    private boolean timesOverlap(LocalDateTime start1, LocalDateTime end1, LocalDateTime start2, LocalDateTime end2) {
-        return !start1.isAfter(end2) && !start2.isAfter(end1);
-    }
-
-    
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -471,126 +384,87 @@ public class TimeSheetService {
 
     return new HttpEntity<>(headers);
     }
-
+    
     public List<ProjectTaskView> getUserTaskView(Long userId) {
-    // 🔹 Step 1: Call PMS API dynamically using configured base URL
-    String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
+        // 🔹 Step 1: Call PMS API dynamically using configured base URL
+        String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
 
-    ResponseEntity<List<Map<String, Object>>> response =
-            restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    buildEntityWithAuth(),
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
+        ResponseEntity<List<Map<String, Object>>> response =
+                restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        buildEntityWithAuth(),
+                        new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+                );
 
-    List<Map<String, Object>> taskData = response.getBody();
-    if (taskData == null || taskData.isEmpty()) {
-        taskData = Collections.emptyList();
-    }
+        List<Map<String, Object>> taskData = response.getBody();
+        if (taskData == null || taskData.isEmpty()) {
+            taskData = Collections.emptyList();
+        }
 
-    // 🔹 Step 2: Group external PMS tasks by projectId
-    Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
+        // 🔹 Step 2: Group external PMS tasks by projectId
+        Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
 
-    for (Map<String, Object> task : taskData) {
-        Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
-        String taskName = (String) task.get("title");
-        String description = (String) task.get("description");
+        for (Map<String, Object> task : taskData) {
+            Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
+            String taskName = (String) task.get("title");
+            String description = (String) task.get("description");
 
-        // Extract project info safely
-        Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
-        Long projectId = null;
-        final String projectName;
+            // Extract project info safely
+            Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
+            Long projectId = null;
+            final String projectName;
 
-        if (projectObj != null) {
-            Object idObj = projectObj.get("id");
-            if (idObj instanceof Number) {
-                projectId = ((Number) idObj).longValue();
+            if (projectObj != null) {
+                Object idObj = projectObj.get("id");
+                if (idObj instanceof Number) {
+                    projectId = ((Number) idObj).longValue();
+                }
+                projectName = (String) projectObj.get("name");
+            } else {
+                projectName = null;
             }
-            projectName = (String) projectObj.get("name");
-        } else {
-            projectName = null;
+
+            String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
+            String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+
+            TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
+
+            if (projectId != null) {
+                projectMap
+                    .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
+                    .getTasks()
+                    .add(taskDTO);
+            }
         }
 
-        String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
-        String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+        // 🔹 Step 3: Fetch Internal Projects from DB
+        List<InternalProject> internalProjects = internalProjectRepository.findAll();
+        Map<Long, ProjectTaskView> internalMap = new LinkedHashMap<>();
 
-        TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
+        for (InternalProject ip : internalProjects) {
+            Long projectId = ip.getProjectId() != null ? ip.getProjectId().longValue() : null;
+            Long taskId = ip.getTaskId() != null ? ip.getTaskId().longValue() : null;
 
-        if (projectId != null) {
-            projectMap
-                .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
+            internalMap
+                .computeIfAbsent(projectId != null ? projectId : 0L,
+                        pid -> new ProjectTaskView(pid, ip.getProjectName(), new ArrayList<>()))
                 .getTasks()
-                .add(taskDTO);
+                .add(new TaskDTO(
+                        taskId,
+                        ip.getTaskName(),
+                        null, // description
+                        null, // startTime
+                        null  // endTime
+                ));
         }
-    }
 
-    // 🔹 Step 3: Fetch Internal Projects from DB
-    List<InternalProject> internalProjects = internalProjectRepository.findAll();
-    Map<Long, ProjectTaskView> internalMap = new LinkedHashMap<>();
+        // 🔹 Step 4: Combine External (PMS) and Internal project-task data
+        List<ProjectTaskView> combinedList = new ArrayList<>(projectMap.values());
+        combinedList.addAll(internalMap.values());
 
-    for (InternalProject ip : internalProjects) {
-        Long projectId = ip.getProjectId() != null ? ip.getProjectId().longValue() : null;
-        Long taskId = ip.getTaskId() != null ? ip.getTaskId().longValue() : null;
-
-        internalMap
-            .computeIfAbsent(projectId != null ? projectId : 0L,
-                    pid -> new ProjectTaskView(pid, ip.getProjectName(), new ArrayList<>()))
-            .getTasks()
-            .add(new TaskDTO(
-                    taskId,
-                    ip.getTaskName(),
-                    null, // description
-                    null, // startTime
-                    null  // endTime
-            ));
-    }
-
-    // 🔹 Step 4: Combine External (PMS) and Internal project-task data
-    List<ProjectTaskView> combinedList = new ArrayList<>(projectMap.values());
-    combinedList.addAll(internalMap.values());
-
-    return combinedList;
-    }
-
-
-
-    public List<ProjectTaskView> getUserTaskViewM() {
-    String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
-
-    ResponseEntity<List<Map<String, Object>>> response =
-            restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    buildEntityWithAuth(),
-                    new ParameterizedTypeReference<>() {}
-            );
-
-    List<Map<String, Object>> projectData = response.getBody();
-    if (projectData == null || projectData.isEmpty()) {
-        return Collections.emptyList();
-    }
-
-    return projectData.stream().map(p -> {
-        Long projectId = ((Number) p.get("projectId")).longValue();
-        String projectName = (String) p.get("projectName");
-
-        List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
-        List<TaskDTO> tasks = taskList.stream()
-                .map(t -> new TaskDTO(
-                        ((Number) t.get("taskId")).longValue(),
-                        (String) t.get("taskName"),
-                        null, // description not available
-                        null, // startTime not available
-                        null  // endTime not available
-                ))
-                .toList();
-
-        return new ProjectTaskView(projectId, projectName, tasks);
-    }).toList();
-}
-
-
+        return combinedList;
+        }
     
     public List<ManagerUserMappingDTO> getUsersAssignedToManagers(Long userId) {
 
@@ -634,9 +508,9 @@ public class TimeSheetService {
                                 String projectName = (String) p.get("name");
 
                                 // Only this user in "users"
-                                List<UserSDTO> users = List.of(new UserSDTO(userId, "Ajay default"));
+                                // List<UserSDTO> users = List.of(new UserSDTO(userId, "Ajay default"));
 
-                                return new ProjectWithUsersDTO(projectId, projectName, users);
+                                return new ProjectWithUsersDTO(projectId, projectName);
                             })
                             .toList();
 
@@ -644,257 +518,119 @@ public class TimeSheetService {
                 })
                 .toList();
     }
-    private BigDecimal calculateProductivityScore(BigDecimal totalHours,
-                                              double billablePercent,
-                                              long tasksWorked,
-                                              long projectsWorked) {
-    // Normalize each factor
-    double hoursScore = Math.min(totalHours.doubleValue() / 8.0, 1.0) * 100; // max 8h/day
-    double taskScore = Math.min(tasksWorked / 5.0, 1.0) * 100;                // max 5 tasks/day
-    double projectScore = Math.min(projectsWorked / 3.0, 1.0) * 100;          // max 3 projects/day
 
-    // Composite score: average of hours, billable %, tasks, projects
-    double productivity = (hoursScore + billablePercent + taskScore + projectScore) / 4.0;
+    public List<ProjectTaskView> getUserTaskViewM() {
+        // 1️⃣ Fetch from PMS
+        String url = String.format("%s/projects/projects-tasks", pmsBaseUrl);
+        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                buildEntityWithAuth(),
+                new ParameterizedTypeReference<>() {}
+        );
 
-    return BigDecimal.valueOf(productivity).setScale(2, RoundingMode.HALF_UP);
-    }
+        List<Map<String, Object>> pmsData = response.getBody();
+        if (pmsData == null) pmsData = new ArrayList<>();
 
-    public Map<String, Object> getSummary(Long userId, LocalDate startDate, LocalDate endDate) {
+        // 2️⃣ Fetch from internal DB
+        List<InternalProject> internalProjects = internalProjectRepository.findAll();
 
-    // ✅ 0. Default date logic
-    LocalDate today = LocalDate.now();
-    if (startDate == null) {
-        startDate = today.withDayOfMonth(1); // First day of current month
-    }
-    if (endDate == null) {
-        endDate = today; // Current day
-    }
+        // 3️⃣ Convert PMS projects into DTOs
+        Map<Long, ProjectTaskView> mergedProjects = new LinkedHashMap<>();
 
-    HttpEntity<Void> entity = buildEntityWithAuth();
+        for (Map<String, Object> p : pmsData) {
+            Long projectId = ((Number) p.get("projectId")).longValue();
+            final String[] projectNameHolder = new String[] { (String) p.get("projectName") };
 
-    // ✅ 1. Fetch projects from PMS
-    String url = pmsBaseUrl + "/projects";
-    ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-            url,
-            HttpMethod.GET,
-            entity,
-            new ParameterizedTypeReference<>() {}
-    );
+            List<Map<String, Object>> taskList = (List<Map<String, Object>>) p.get("tasks");
 
-    Map<Long, String> projectMap = Optional.ofNullable(response.getBody())
-            .orElse(Collections.emptyList())
-            .stream()
-            .collect(Collectors.toMap(
-                    p -> ((Number) p.get("id")).longValue(),
-                    p -> (String) p.get("name")
-            ));
+            List<TaskDTO> tasks = taskList.stream().map(t -> {
+                Long taskId = ((Number) t.get("taskId")).longValue();
+                final String[] taskNameHolder = new String[] { (String) t.get("taskName") };
 
-    // ✅ 2. Fetch timesheets for user in range
-    List<TimeSheet> sheets = timeSheetRepository.findByUserIdAndWorkDateBetween(userId, startDate, endDate);
+                return new TaskDTO(taskId, taskNameHolder[0], null, null, null);
+            }).collect(Collectors.toList());
 
-    // Flatten entries
-    List<TimeSheetEntry> entries = sheets.stream()
-            .flatMap(s -> s.getEntries().stream())
-            .toList();
+            // Override project name if found internally
+            internalProjects.stream()
+                    .filter(ip -> ip.getProjectId().equals(projectId.intValue()))
+                    .findFirst()
+                    .ifPresent(ip -> {
+                        if (ip.getProjectName() != null) projectNameHolder[0] = ip.getProjectName();
+                    });
 
-    // ✅ 3. Timesheet Summary
-    Map<String, Long> timesheetSummary = Map.of(
-            "pending", sheets.stream().filter(s -> "Pending".equalsIgnoreCase(s.getStatus())).count(),
-            "approved", sheets.stream().filter(s -> "Approved".equalsIgnoreCase(s.getStatus())).count(),
-            "rejected", sheets.stream().filter(s -> "Rejected".equalsIgnoreCase(s.getStatus())).count()
-    );
-
-    // ✅ 4. Billable Activity
-    long billableLogs = entries.stream().filter(e -> Boolean.TRUE.equals(e.getIsBillable())).count();
-    long nonBillableLogs = entries.size() - billableLogs;
-    Map<String, Long> billableActivity = Map.of(
-            "billableLogs", billableLogs,
-            "nonBillableLogs", nonBillableLogs
-    );
-
-    // ✅ 5. Project Summary (using true HH.mm formatting)
-    Map<Long, BigDecimal> projectHours = entries.stream()
-            .collect(Collectors.groupingBy(
-                    TimeSheetEntry::getProjectId,
-                    Collectors.reducing(
-                            BigDecimal.ZERO,
-                            this::calculateHours,
-                            BigDecimal::add
-                    )
-            ));
-
-    List<Map<String, Object>> projectSummary = projectHours.entrySet().stream()
-            .map(e -> {
-                Map<String, Object> map = new HashMap<>();
-                map.put("projectId", e.getKey());
-                map.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
-                map.put("totalHoursWorked", formatHours(e.getValue())); // fixed
-                return map;
-            })
-            .collect(Collectors.toList());
-
-    // ✅ 6. Weekly Summary
-    Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
-            .collect(Collectors.toMap(
-                    d -> d.name().toLowerCase(),
-                    d -> BigDecimal.ZERO,
-                    (a, b) -> a,
-                    LinkedHashMap::new
-            ));
-
-    entries.forEach(entry -> {
-        LocalDate workDate = entry.getTimeSheet().getWorkDate();
-        DayOfWeek day = workDate.getDayOfWeek();
-        BigDecimal hours = calculateHours(entry);
-
-        weeklySummary.merge(day.name().toLowerCase(), hours, BigDecimal::add);
-    });
-
-    // ✅ Round weekly hours & format to 2 decimals
-    weeklySummary.replaceAll((k, v) -> formatHours(v));
-
-    // ✅ 7. Calculate total hours worked for range
-    BigDecimal totalHours = entries.stream()
-            .map(this::calculateHours)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    totalHours = formatHours(totalHours);
-
-    Map<String, Map<String, Object>> productivityDetails = new LinkedHashMap<>();
-    for (DayOfWeek day : DayOfWeek.values()) {
-    if (day == DayOfWeek.SUNDAY) continue; // skip Sunday
-
-    List<TimeSheetEntry> dailyEntries = entries.stream()
-            .filter(e -> e.getTimeSheet().getWorkDate().getDayOfWeek() == day)
-            .toList();
-
-    BigDecimal dailyTotalHours = dailyEntries.stream()
-            .map(this::calculateHours)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-    dailyTotalHours = formatHours(dailyTotalHours);
-
-    BigDecimal billableHours = dailyEntries.stream()
-            .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
-            .map(this::calculateHours)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-    double billablePercent = 0.0;
-    if (dailyTotalHours.compareTo(BigDecimal.ZERO) > 0) {
-        billablePercent = billableHours.divide(dailyTotalHours, 2, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100)).doubleValue();
-    }
-
-    long tasksWorked = dailyEntries.stream()
-            .map(TimeSheetEntry::getTaskId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .count();
-
-    long projectsWorked = dailyEntries.stream()
-            .map(TimeSheetEntry::getProjectId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .count();
-
-    BigDecimal productivityScore = calculateProductivityScore(dailyTotalHours, billablePercent, tasksWorked, projectsWorked);
-
-    productivityDetails.put(day.name().toLowerCase(), Map.of(
-            "totalHours", dailyTotalHours,
-            "billablePercentage", billablePercent,
-            "tasksWorked", tasksWorked,
-            "projectsWorked", projectsWorked,
-            "productivityScore", productivityScore
-    ));
-    }
-
-
-    // --- After calculating totalHours (already in HH.mm format) ---
-
-        // 1️⃣ Total distinct tasks submitted in the date range
-        long totalTasks = entries.stream()
-                .map(TimeSheetEntry::getTaskId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .count();
-
-        // 2️⃣ Total number of days timesheet submitted
-        long totalDays = sheets.stream()
-                .map(TimeSheet::getWorkDate)
-                .distinct()
-                .count();
-
-       // 3️⃣ Average hours per day (HH:mm accurate)
-        String averageHoursPerDay = "00:00";
-        if (totalDays > 0 && totalHours.compareTo(BigDecimal.ZERO) > 0) {
-            // Convert totalHours (e.g., 70.30) → total minutes
-            long totalMinutes = totalHoursToMinutes(totalHours);
-            long avgMinutes = totalMinutes / totalDays;
-            long avgHoursPart = avgMinutes / 60;
-            long avgMinutesPart = avgMinutes % 60;
-
-            averageHoursPerDay = String.format("%02d:%02d", avgHoursPart, avgMinutesPart);
+            mergedProjects.put(projectId, new ProjectTaskView(projectId, projectNameHolder[0], tasks));
         }
 
+        // 4️⃣ Add internal-only projects (not present in PMS)
+        Map<Integer, List<InternalProject>> groupedInternal =
+                internalProjects.stream().collect(Collectors.groupingBy(InternalProject::getProjectId));
 
-        // 4️⃣ Overall billable percentage
-        BigDecimal totalBillableHours = entries.stream()
-                .filter(e -> Boolean.TRUE.equals(e.getIsBillable()))
-                .map(this::calculateHours)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        for (Map.Entry<Integer, List<InternalProject>> entry : groupedInternal.entrySet()) {
+            Long internalProjId = entry.getKey().longValue();
+            if (!mergedProjects.containsKey(internalProjId)) {
+                List<TaskDTO> tasks = entry.getValue().stream()
+                        .map(ip -> new TaskDTO(
+                                ip.getTaskId().longValue(),
+                                ip.getTaskName(),
+                                null, null, null))
+                        .collect(Collectors.toList());
 
-        double overallBillablePercentage = totalHours.compareTo(BigDecimal.ZERO) > 0
-            ? totalBillableHours.divide(totalHours, 2, RoundingMode.HALF_UP)
-            .multiply(BigDecimal.valueOf(100))
-            .doubleValue()
-            : 0.0;
-
-        // --- Add to final response ---
-        return Map.of(
-                "timesheetSummary", timesheetSummary,
-                "billableActivity", billableActivity,
-                "projectSummary", projectSummary,
-                "weeklySummary", weeklySummary,
-                "totalHours", totalHours,
-                "totalTasks", totalTasks,
-                "averageHoursPerDay", averageHoursPerDay,
-                "billablePercentage", overallBillablePercentage,
-                "dateRange", Map.of("startDate", startDate, "endDate", endDate),
-                "productivityDetails", productivityDetails
-            );
-
-    }
-
-
-    private BigDecimal calculateHours(TimeSheetEntry entry) {
-    if (entry.getFromTime() != null && entry.getToTime() != null) {
-        long totalMinutes = Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
-        long hoursPart = totalMinutes / 60;
-        long minutesPart = totalMinutes % 60;
-        return new BigDecimal(String.format("%d.%02d", hoursPart, minutesPart));
-    } else if (entry.getHoursWorked() != null) {
-        return entry.getHoursWorked();
-    }
-    return BigDecimal.ZERO;
-    }
-
-    private BigDecimal formatHours(BigDecimal hoursDecimal) {
-        long totalMinutes = totalHoursToMinutes(hoursDecimal);
-        long hours = totalMinutes / 60;
-        long minutes = totalMinutes % 60;
-        return new BigDecimal(String.format("%d.%02d", hours, minutes));
-    }
-
-    private long totalHoursToMinutes(BigDecimal hoursDecimal) {
-        String[] parts = hoursDecimal.toPlainString().split("\\.");
-        long hours = Long.parseLong(parts[0]);
-        long minutes = 0;
-        if (parts.length > 1) {
-            String minutePart = parts[1];
-            if (minutePart.length() == 1) minutePart += "0";
-            minutes = Long.parseLong(minutePart);
-            if (minutes > 59) minutes = 59;
-        }
-        return (hours * 60) + minutes;
+                InternalProject first = entry.getValue().get(0);
+                mergedProjects.put(internalProjId, new ProjectTaskView(
+                        internalProjId,
+                        first.getProjectName(),
+                        tasks
+                ));
+            }
         }
 
+        // 5️⃣ Return combined sorted list
+        return new ArrayList<>(mergedProjects.values());
+    }
+    @Autowired
+    private TimeSheetEntryRepo timeSheetEntryRepository;
+@Transactional
+public String updateEntries(TimeSheetUpdateRequest request) {
 
+    TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
+            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
+
+    BigDecimal totalHours = BigDecimal.ZERO;
+
+    for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
+        TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
+                .orElseThrow(() -> new RuntimeException("Entry not found with ID: " + dto.getId()));
+
+        // partial update — only update fields that are provided
+        if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
+        if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
+        if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
+        if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
+        if (dto.getFromTime() != null) entry.setFromTime(dto.getFromTime());
+        if (dto.getToTime() != null) entry.setToTime(dto.getToTime());
+        if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
+        if (dto.getHoursWorked() != null)
+            entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
+
+        timeSheetEntryRepository.save(entry);
+    }
+
+    // Recalculate total hours after update
+    for (TimeSheetEntry e : timeSheet.getEntries()) {
+        if (e.getHoursWorked() != null) {
+            totalHours = totalHours.add(e.getHoursWorked());
+        }
+    }
+
+    timeSheet.setHoursWorked(totalHours);
+    timeSheet.setUpdatedAt(LocalDateTime.now());
+    timeSheetRepository.save(timeSheet);
+
+    return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
 }
+
+    
+}
+
+

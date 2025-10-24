@@ -1,0 +1,69 @@
+package com.intranet.controller;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.intranet.dto.UserDTO;
+import com.intranet.entity.TimeSheet;
+import com.intranet.repository.TimeSheetRepo;
+import com.intranet.security.CurrentUser;
+import com.intranet.service.TimeUtil;
+
+import io.swagger.v3.oas.annotations.Operation;
+
+
+@RestController
+@RequestMapping("/api/dashboard")
+@CrossOrigin(origins = "*",allowedHeaders = "*")
+public class DashboardController {
+
+    @Autowired
+    private TimeSheetRepo timeSheetRepo;
+
+    /**
+     * Get total hours entered by a user in the current month
+     */
+    @GetMapping("/total_hours")
+    @Operation(summary = "Get total hours entered by a user in the current month")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getTotalHoursCurrentMonth(
+        @CurrentUser UserDTO user
+    ) 
+    {
+        if (user.getId() == null) {
+            return ResponseEntity.badRequest().body("User ID cannot be null");
+        }
+
+        LocalDate now = LocalDate.now();
+        LocalDate startOfMonth = now.withDayOfMonth(1);
+        LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+
+        // Fetch timesheets for user in current month
+        List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWorkDateBetween(user.getId(), startOfMonth, endOfMonth);
+        if (timesheets.isEmpty()) {
+            return ResponseEntity.ok("No timesheets found for current month");
+        }
+
+        // Collect all hoursWorked values
+        List<BigDecimal> hoursList = timesheets.stream()
+                .map(TimeSheet::getHoursWorked)
+                .collect(Collectors.toList());
+
+        // Sum hours using TimeUtil
+        BigDecimal totalHours = TimeUtil.sumHours(hoursList);
+
+        return ResponseEntity.ok(Map.of("totalHours", totalHours.toPlainString()));
+    }
+    
+}
