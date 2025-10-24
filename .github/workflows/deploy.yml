@@ -42,14 +42,15 @@ jobs:
 
       # 6️⃣ Upload JAR to EC2
       - name: Upload JAR to EC2 via rsync
-        uses: burnett01/rsync-deployments@v4
+        uses: burnett01/rsync-deployments@7.1.0
+        
         with:
             switches: -avz --delete
             path: target/TimeSheetManagement.jar
             remote_path: ${{ secrets.EC2_PATH }}/TimeSheetManagement.jar
             remote_host: ${{ secrets.EC2_HOST }}
             remote_user: ${{ secrets.EC2_USER }}
-            ssh_key: ${{ secrets.EC2_SSH_KEY }}
+            remote_key: ${{ secrets.EC2_SSH_KEY }}
 
 
       # 7️⃣ Verify JAR on EC2
