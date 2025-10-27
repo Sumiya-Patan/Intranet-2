@@ -100,6 +100,7 @@ public class TimeSheetService {
             entry.setFromTime(dto.getFromTime());
             entry.setToTime(dto.getToTime());
             entry.setOtherDescription(dto.getOtherDescription());
+            entry.setBillable(dto.isBillable());
 
             BigDecimal hours = dto.getHoursWorked();
             if (hours == null) {
@@ -244,6 +245,7 @@ public class TimeSheetService {
         summary.setTaskId(entry.getTaskId());
         summary.setDescription(entry.getDescription());
         summary.setWorkLocation(entry.getWorkLocation());
+    
         
         // Convert LocalDateTime to String format (HH:mm)
         if (entry.getFromTime() != null) {
@@ -255,6 +257,7 @@ public class TimeSheetService {
         
         summary.setHoursWorked(entry.getHoursWorked());
         summary.setOtherDescription(entry.getOtherDescription());
+        summary.setIsBillable(entry.isBillable());
         return summary;
     }
     
@@ -311,6 +314,7 @@ public class TimeSheetService {
             entry.setWorkLocation(entryDTO.getWorkLocation());
             entry.setHoursWorked(entryDTO.getHoursWorked());
             entry.setOtherDescription(entryDTO.getOtherDescription());
+            entry.setBillable(entryDTO.isBillable());
 
             timeSheet.getEntries().add(entry);
         }
@@ -427,8 +431,9 @@ public class TimeSheetService {
 
             String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
             String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+            boolean isBillable = task.get("isBillable") != null && (Boolean) task.get("isBillable");
 
-            TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime);
+            TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime, isBillable);
 
             if (projectId != null) {
                 projectMap
@@ -455,7 +460,8 @@ public class TimeSheetService {
                         ip.getTaskName(),
                         null, // description
                         null, // startTime
-                        null  // endTime
+                        null,  // endTime
+                        ip.isBillable() // isBillable
                 ));
         }
 
@@ -547,8 +553,9 @@ public class TimeSheetService {
             List<TaskDTO> tasks = taskList.stream().map(t -> {
                 Long taskId = ((Number) t.get("taskId")).longValue();
                 final String[] taskNameHolder = new String[] { (String) t.get("taskName") };
+                Boolean isBillable = t.get("isBillable") != null && (Boolean) t.get("isBillable");
 
-                return new TaskDTO(taskId, taskNameHolder[0], null, null, null);
+                return new TaskDTO(taskId, taskNameHolder[0], null, null, null, isBillable);
             }).collect(Collectors.toList());
 
             // Override project name if found internally
@@ -573,7 +580,7 @@ public class TimeSheetService {
                         .map(ip -> new TaskDTO(
                                 ip.getTaskId().longValue(),
                                 ip.getTaskName(),
-                                null, null, null))
+                                null, null, null, ip.isBillable()))
                         .collect(Collectors.toList());
 
                 InternalProject first = entry.getValue().get(0);
@@ -612,6 +619,8 @@ public String updateEntries(TimeSheetUpdateRequest request) {
         if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
         if (dto.getHoursWorked() != null)
             entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
+        if (dto.getIsBillable() != null)
+            entry.setBillable(dto.getIsBillable());
 
         timeSheetEntryRepository.save(entry);
     }

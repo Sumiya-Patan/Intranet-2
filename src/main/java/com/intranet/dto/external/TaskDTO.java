@@ -11,6 +11,7 @@ public class TaskDTO {
     private String description;
     private String startTime;
     private String endTime;
+    private boolean isBillable;
 
     
 }

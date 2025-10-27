@@ -16,4 +16,5 @@ public class TimeSheetEntrySummaryDTO {
     private LocalDateTime toTime;   // optional: formatted as HH:mm
     private BigDecimal hoursWorked;
     private String otherDescription;
+    private Boolean isBillable;
 }

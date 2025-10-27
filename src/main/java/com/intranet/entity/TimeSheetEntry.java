@@ -32,4 +32,5 @@ public class TimeSheetEntry {
     private LocalDateTime toTime;
     private BigDecimal hoursWorked;
     private String otherDescription;
+    private boolean isBillable;
 }

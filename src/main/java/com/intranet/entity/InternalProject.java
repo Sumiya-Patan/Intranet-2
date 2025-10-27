@@ -28,4 +28,7 @@ public class InternalProject {
 
     @Column(nullable = false, length = 100)
     private String taskName;  // Manager of the internal project
+
+    @Column(nullable = false)
+    private boolean isBillable;
 }

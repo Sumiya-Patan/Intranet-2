@@ -18,6 +18,7 @@ import com.intranet.dto.UserDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.security.CurrentUser;
+import com.intranet.service.DashboardService;
 import com.intranet.service.TimeUtil;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,8 @@ public class DashboardController {
 
     @Autowired
     private TimeSheetRepo timeSheetRepo;
+    @Autowired
+    private DashboardService dashboardService;
 
     /**
      * Get total hours entered by a user in the current month
@@ -66,4 +69,13 @@ public class DashboardController {
         return ResponseEntity.ok(Map.of("totalHours", totalHours.toPlainString()));
     }
     
+
+    @GetMapping("/summary")
+    @Operation(summary = "Get summary of the dashboard")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getSummary(
+        @CurrentUser UserDTO user
+    ) {
+        return ResponseEntity.ok(dashboardService.getSummary(user.getId(), LocalDate.now().withDayOfMonth(1), LocalDate.now()));
+    }
 }
