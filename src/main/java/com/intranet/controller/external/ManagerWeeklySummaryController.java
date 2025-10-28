@@ -20,7 +20,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/timesheets")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*",allowedHeaders = "*")
 public class ManagerWeeklySummaryController {
