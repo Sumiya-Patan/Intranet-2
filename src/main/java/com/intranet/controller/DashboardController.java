@@ -2,6 +2,7 @@ package com.intranet.controller;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -76,6 +77,6 @@ public class DashboardController {
     public ResponseEntity<?> getSummary(
         @CurrentUser UserDTO user
     ) {
-        return ResponseEntity.ok(dashboardService.getSummary(user.getId(), LocalDate.now().withDayOfMonth(1), LocalDate.now()));
+        return ResponseEntity.ok(dashboardService.getDashboardSummary(user.getId(), LocalDate.now().withDayOfMonth(1), LocalDate.now().with(TemporalAdjusters.lastDayOfMonth())));
     }
 }
