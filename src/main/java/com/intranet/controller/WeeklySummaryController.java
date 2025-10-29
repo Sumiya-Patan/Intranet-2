@@ -42,7 +42,7 @@ public class WeeklySummaryController {
         return ResponseEntity.ok(summary);
         }
         catch(Exception e){
-            return ResponseEntity.badRequest().body("Unable to fetch data");
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }
