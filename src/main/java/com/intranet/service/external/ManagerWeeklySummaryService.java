@@ -174,6 +174,7 @@ private TimeSheetSummaryDTO mapToSummaryDTOForManager(TimeSheet ts, Long manager
         dto.setToTime(e.getToTime() != null ? e.getToTime(): null);
         dto.setHoursWorked(e.getHoursWorked());
         dto.setOtherDescription(e.getOtherDescription());
+        dto.setIsBillable(e.isBillable());
         return dto;
     }).toList();
 
