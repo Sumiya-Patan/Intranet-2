@@ -595,10 +595,11 @@ public class TimeSheetService {
         // 5️⃣ Return combined sorted list
         return new ArrayList<>(mergedProjects.values());
     }
+
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
-@Transactional
-public String updateEntries(TimeSheetUpdateRequest request) {
+    @Transactional
+    public String updateEntries(TimeSheetUpdateRequest request) {
 
     TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
             .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
