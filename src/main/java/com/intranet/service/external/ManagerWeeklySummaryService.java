@@ -22,7 +22,9 @@ import com.intranet.dto.TimeSheetSummaryDTO;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.external.ManagerWeeklySummaryDTO;
 import com.intranet.entity.TimeSheet;
+import com.intranet.entity.TimeSheetOnHolidays;
 import com.intranet.entity.WeekInfo;
+import com.intranet.repository.TimeSheetOnHolidaysRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.service.TimeUtil;
 
@@ -32,8 +34,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ManagerWeeklySummaryService {
 
-    private final RestTemplate restTemplate;
-    private final TimeSheetRepo timeSheetRepository;
+        private final RestTemplate restTemplate;
+        private final TimeSheetRepo timeSheetRepository;
+        private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepo;
 
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -116,15 +119,35 @@ public class ManagerWeeklySummaryService {
                                     timeSheetDTOs.stream().map(TimeSheetSummaryDTO::getHoursWorked).toList()
                             );
 
-                            WeekSummaryDTO weekDTO = new WeekSummaryDTO();
-                            weekDTO.setWeekId(weekNo.longValue());
-                            weekDTO.setStartDate(week.getStartDate());
-                            weekDTO.setEndDate(week.getEndDate());
-                            weekDTO.setTotalHours(totalHours);
-                            weekDTO.setTimesheets(timeSheetDTOs);
-                            return weekDTO;
-                        }).toList();
+                            // Determine week status based on all timesheet statuses
+                        Set<String> statuses = timeSheetDTOs.stream()
+                                .map(TimeSheetSummaryDTO::getStatus)
+                                .collect(Collectors.toSet());
 
+                        String weekStatus;
+                        if (statuses.contains("REJECTED")) {
+                        weekStatus = "REJECTED";
+                        } else if (statuses.size() == 1 && statuses.contains("APPROVED")) {
+                        weekStatus = "APPROVED";
+                        } else if (statuses.size() == 1 && statuses.contains("SUBMITTED")) {
+                        weekStatus = "SUBMITTED";
+                        } else if (statuses.contains("APPROVED") || statuses.contains("SUBMITTED")) {
+                        weekStatus = "SUBMITTED";
+                        } else {
+                        weekStatus = "SUBMITTED"; // default fallback
+                        }
+
+                        WeekSummaryDTO weekDTO = new WeekSummaryDTO();
+                        weekDTO.setWeekId(weekNo.longValue());
+                        weekDTO.setStartDate(week.getStartDate());
+                        weekDTO.setEndDate(week.getEndDate());
+                        weekDTO.setTotalHours(totalHours);
+                        weekDTO.setTimesheets(timeSheetDTOs);
+                        weekDTO.setWeeklyStatus(weekStatus); // ✅ add this new field
+                        return weekDTO;
+
+                        }).toList();
+                
                 ManagerWeeklySummaryDTO managerDTO = new ManagerWeeklySummaryDTO();
                 managerDTO.setUserId(userId);
                 managerDTO.setUserName(userCache.getOrDefault(userId, "Unknown"));
@@ -159,6 +182,11 @@ private TimeSheetSummaryDTO mapToSummaryDTOForManager(TimeSheet ts, Long manager
     dto.setWorkDate(ts.getWorkDate());
     dto.setHoursWorked(ts.getHoursWorked());
     dto.setEntries(entries);
+    // ✅ Check if the timesheet is marked as a holiday timesheet
+    boolean isHolidayTimesheet = timeSheetOnHolidaysRepo.findByTimeSheetId(ts.getId())
+            .map(TimeSheetOnHolidays::getIsHoliday)
+            .orElse(false);
+    dto.setIsHolidayTimesheet(isHolidayTimesheet);
 
     // Manager-specific status
     String managerStatus = ts.getReviews().stream()
