@@ -28,9 +28,11 @@ import com.intranet.service.TimeSheetService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +43,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.intranet.service.TimeUtil;
 
 
 @RestController
@@ -76,6 +79,26 @@ public class TimeSheetController {
 
     @Value("${lms.api.base-url}")
     private String lmsBaseUrl;
+
+    private int convertToMinutes(BigDecimal hhmm) {
+    if (hhmm == null) return 0;
+    String[] parts = hhmm.toPlainString().split("\\.");
+    int hours = Integer.parseInt(parts[0]);
+    int minutes = 0;
+    if (parts.length > 1) {
+        String minPart = parts[1];
+        // Pad single digits (e.g. .5 -> .50)
+        if (minPart.length() == 1) minPart += "0";
+        minutes = Integer.parseInt(minPart);
+        // Normalize incorrect formats like "6.67" → 6h + 67min = 7h 07min
+        if (minutes >= 60) {
+            hours += minutes / 60;
+            minutes = minutes % 60;
+        }
+    }
+    return hours * 60 + minutes;
+}
+
 
     @PostMapping("/create")
     @Operation(summary = "Submit a new timesheet")
@@ -132,7 +155,20 @@ public class TimeSheetController {
             }
         }
 
-        // 🔹 Step 5: Proceed with normal timesheet creation
+        // 🔹 Step 5: Validate total worked hours
+        BigDecimal totalWorked = TimeUtil.sumHours(
+            entries.stream()
+                .map(e -> TimeUtil.calculateHours(e.getFromTime(), e.getToTime()))
+                .collect(Collectors.toList())
+        );
+
+        // Convert HH.MM -> total minutes for accurate comparison
+        int totalMinutes = convertToMinutes(totalWorked);
+        if (totalMinutes < 8 * 60) { // less than 8 hours
+            return ResponseEntity.badRequest().body("Total working hours must be at least 8 hours.");
+        }
+
+        // 🔹 Step 6: Proceed with normal timesheet creation
         TimeSheet response = timeSheetService.createTimeSheet(currentUser.getId(), workDate, entries);
         if (response != null)
         return ResponseEntity.ok().body("Timesheet created successfully");
