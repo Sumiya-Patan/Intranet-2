@@ -146,5 +146,32 @@ public class HolidayExcludeUsersService {
     return "Unknown Manager";
     }
 
+    public List<HolidayExcludeUsers> getAllByManager(Long managerId) {
+        return repository.findByManagerId(managerId);
+    }
+
+    public String deleteHolidayExclude(Long managerId, Long id) {
+        HolidayExcludeUsers existing = repository.findByIdAndManagerId(id, managerId);
+        if (existing == null)
+            throw new IllegalArgumentException("Record not found or not authorized");
+
+        repository.delete(existing);
+        return "Holiday Exclude entry deleted successfully.";
+    }
+
+        public String updateHolidayExclude(Long managerId, Long id, HolidayExcludeUsersRequestDTO dto) {
+        HolidayExcludeUsers existing = repository.findByIdAndManagerId(id, managerId);
+        if (existing == null)
+            throw new IllegalArgumentException("Record not found or not authorized");
+
+        existing.setReason(dto.getReason());
+        existing.setHolidayDate(dto.getHolidayDate());
+        existing.setUpdatedAt(LocalDateTime.now());
+
+        repository.save(existing);
+        return "Holiday Exclude entry updated successfully.";
+    }
+
+
 }
 
