@@ -1,6 +1,7 @@
 package com.intranet.service;
 
 import com.intranet.dto.HolidayDTO;
+import com.intranet.dto.HolidayExcludeResponseDTO;
 import com.intranet.dto.HolidayExcludeUsersRequestDTO;
 import com.intranet.dto.external.ManagerInfoDTO;
 import com.intranet.entity.HolidayExcludeUsers;
@@ -22,6 +23,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -146,9 +149,56 @@ public class HolidayExcludeUsersService {
     return "Unknown Manager";
     }
 
-    public List<HolidayExcludeUsers> getAllByManager(Long managerId) {
-        return repository.findByManagerId(managerId);
+    public List<HolidayExcludeResponseDTO> getAllByManager(Long managerId) {
+    List<HolidayExcludeUsers> users = repository.findByManagerId(managerId);
+    if (users.isEmpty()) {
+        return Collections.emptyList();
     }
+
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // Cache to avoid multiple UMS calls for same user
+    Map<Long, String> userCache = new HashMap<>();
+
+    return users.stream().map(user -> {
+        HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
+        dto.setId(user.getId());
+        dto.setUserId(user.getUserId());
+        dto.setManagerId(user.getManagerId());
+        dto.setHolidayDate(user.getHolidayDate());
+        dto.setReason(user.getReason());
+
+        // Fetch username from cache or call UMS
+        String userName = userCache.computeIfAbsent(
+            user.getUserId(),
+            id -> getUserNameFromUMS(id, entity)
+        );
+        dto.setUserName(userName);
+
+        return dto;
+    }).collect(Collectors.toList());
+    }
+    private String getUserNameFromUMS(Long userId, HttpEntity<Void> entity) {
+    try {
+        String url = String.format("%s/admin/users/%d", umsBaseUrl, userId);
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+
+        Map<String, Object> data = response.getBody();
+        if (data != null) {
+            String firstName = (String) data.get("first_name");
+            String lastName = (String) data.get("last_name");
+            return (firstName != null ? firstName : "") + 
+                   (lastName != null ? " " + lastName : "");
+        }
+    } catch (Exception e) {
+        System.err.println("⚠️ Failed to fetch username for userId=" + userId + ": " + e.getMessage());
+    }
+    return "Unknown User";
+    }
+
+
 
     public String deleteHolidayExclude(Long managerId, Long id) {
         HolidayExcludeUsers existing = repository.findByIdAndManagerId(id, managerId);
