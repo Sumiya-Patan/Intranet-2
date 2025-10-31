@@ -198,13 +198,13 @@ public class WeeklyTimeSheetReviewService {
         // ✅ Step 4: Compute required hours (40 - (8 * holidays))
         BigDecimal requiredHours = BigDecimal.valueOf(40 - (holidayCount * 8));
 
-        // // ✅ Step 5: Validation check
-        // if (totalWorked.compareTo(requiredHours) < 0) {
-        //     throw new IllegalArgumentException(String.format(
-        //         "Weekly total hours %.2f are less than required minimum %.2f hours for  %d holidays.",
-        //         totalWorked, requiredHours, holidayCount
-        //     ));
-        // }
+        // ✅ Step 5: Validation check
+        if (totalWorked.compareTo(requiredHours) < 0) {
+            throw new IllegalArgumentException(String.format(
+                "Weekly total hours %.2f are less than required minimum %.2f hours for  %d holidays.",
+                totalWorked, requiredHours, holidayCount
+            ));
+        }
 
             // ✅ Step 6: Check existing weekly review
             Optional<WeeklyTimeSheetReview> existingReviewOpt =
