@@ -214,7 +214,16 @@ public class WeeklySummaryService {
                         .filter(r -> r.getManagerId().equals(managerId))
                         .findFirst();
 
-                String action = reviewOpt.map(r -> r.getStatus().name()).orElse("Pending");
+                String action;
+
+                if (ts.getStatus() == TimeSheet.Status.SUBMITTED) {
+                    // 🔹 If timesheet is just submitted, force action to PENDING
+                    action = "Pending";
+                } else {
+                    // 🔹 Otherwise, get actual review status if exists
+                    action = reviewOpt.map(r -> r.getStatus().name()).orElse("Pending");
+                }
+
 
                 // avoid duplicates
                 boolean exists = actionStatusList.stream()

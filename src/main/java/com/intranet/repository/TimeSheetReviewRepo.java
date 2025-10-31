@@ -17,4 +17,6 @@ public interface TimeSheetReviewRepo  extends JpaRepository<TimeSheetReview, Lon
 
     List<TimeSheetReview> findByTimeSheet_Id(Long id);
 
+    List<TimeSheetReview> findByTimeSheet_IdIn(List<Long> timeSheetIds);
+
 }

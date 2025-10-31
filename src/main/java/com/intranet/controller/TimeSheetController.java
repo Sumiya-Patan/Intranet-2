@@ -3,7 +3,6 @@ package com.intranet.controller;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -19,7 +18,6 @@ import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
-import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
@@ -233,36 +231,6 @@ public class TimeSheetController {
         String response = timeSheetService.addEntriesToTimeSheet(addEntryDTO);
         return ResponseEntity.ok().body(response);
     }
-    
-
-    @GetMapping("/weekly-summary-in-range")
-    @Operation(summary = "Get timesheets grouped by week for a date range")
-    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
-    public ResponseEntity<?> getWeeklyTimesheetSummary(
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        
-        try {
-            List<WeekSummaryDTO> weeklySummary = timeSheetService.getTimesheetsByDateRange(startDate, endDate);
-            return ResponseEntity.ok(weeklySummary);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Failed to retrieve weekly timesheet summary");
-        }
-    }
-
-    @GetMapping("/debug/all")
-    @Operation(summary = "Debug endpoint to check all timesheets in database")
-    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
-    public ResponseEntity<?> debugAllTimesheets() {
-        try {
-            return ResponseEntity.ok(timeSheetService.debugGetAllTimesheets());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Failed to retrieve timesheets: " + e.getMessage());
-        }
-    }
-     
     
     @DeleteMapping("/deleteEntries/{timesheetId}")
     @Operation(summary = "Delete specific entries from a timesheet")

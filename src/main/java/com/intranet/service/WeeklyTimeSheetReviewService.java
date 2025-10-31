@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -20,9 +21,11 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.entity.TimeSheet;
+import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +37,8 @@ public class WeeklyTimeSheetReviewService {
 
     private final TimeSheetRepo timeSheetRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
-    
+    private final TimeSheetReviewRepo timeSheetReviewRepo;
+
     @Value("${tms.api.base-url}")
     private String tmsBaseUrl;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -194,43 +198,66 @@ public class WeeklyTimeSheetReviewService {
         // ✅ Step 4: Compute required hours (40 - (8 * holidays))
         BigDecimal requiredHours = BigDecimal.valueOf(40 - (holidayCount * 8));
 
-        // ✅ Step 5: Validation check
-        if (totalWorked.compareTo(requiredHours) < 0) {
-            throw new IllegalArgumentException(String.format(
-                "Weekly total hours %.2f are less than required minimum %.2f hours for  %d holidays.",
-                totalWorked, requiredHours, holidayCount
-            ));
-        }
+        // // ✅ Step 5: Validation check
+        // if (totalWorked.compareTo(requiredHours) < 0) {
+        //     throw new IllegalArgumentException(String.format(
+        //         "Weekly total hours %.2f are less than required minimum %.2f hours for  %d holidays.",
+        //         totalWorked, requiredHours, holidayCount
+        //     ));
+        // }
 
-        // ✅ Step 6: Check existing weekly review
-        WeeklyTimeSheetReview review = weeklyReviewRepo
-                .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
-                .orElseGet(WeeklyTimeSheetReview::new);
+            // ✅ Step 6: Check existing weekly review
+            Optional<WeeklyTimeSheetReview> existingReviewOpt =
+                    weeklyReviewRepo.findByUserIdAndWeekInfo_Id(userId, commonWeek.getId());
 
-        if (review.getStatus() != null 
-                && review.getStatus() != WeeklyTimeSheetReview.Status.SUBMITTED) {
-            throw new IllegalStateException(
-                "Cannot submit timesheets for this week. Weekly review is already " + review.getStatus()
-            );
-        }
+            WeeklyTimeSheetReview review;
 
-        // ✅ Step 7: Update all timesheets from DRAFT → SUBMITTED
-        timeSheets.forEach(ts -> {
-            if (ts.getStatus() == TimeSheet.Status.DRAFT) {
+            if (existingReviewOpt.isPresent()) {
+                // 🔹 Update existing record
+                review = existingReviewOpt.get();
+
+                // Prevent resubmission if already submitted/approved
+                if (
+                    review.getStatus() == WeeklyTimeSheetReview.Status.APPROVED) {
+                    throw new IllegalStateException(
+                        "Weekly review already " + review.getStatus() + " for this week."
+                    );
+                }
+
+                review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
+                review.setReviewedAt(LocalDateTime.now());
+
+            } else {
+                // 🔹 Create new record
+                review = new WeeklyTimeSheetReview();
+                review.setWeekInfo(commonWeek);
+                review.setUserId(userId);
+                review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
+                review.setSubmittedAt(LocalDateTime.now());
+                review.setReviewedAt(LocalDateTime.now());
+            }
+
+            // ✅ Step 7: Update all timesheets from DRAFT → SUBMITTED
+            timeSheets.forEach(ts -> {
                 ts.setStatus(TimeSheet.Status.SUBMITTED);
                 ts.setUpdatedAt(LocalDateTime.now());
+            });
+            timeSheetRepo.saveAll(timeSheets);
+
+            // ✅ Step 8: Save the weekly review
+            weeklyReviewRepo.save(review);
+
+            // ✅ Step 5: Update existing TimeSheetReview records → PENDING
+            List<TimeSheetReview> existingReviews = timeSheetReviewRepo.findByTimeSheet_IdIn(timeSheetIds);
+
+            if (existingReviews != null && !existingReviews.isEmpty()) {
+                for (TimeSheetReview r : existingReviews) {
+                    r.setStatus(TimeSheetReview.Status.SUBMITTED);
+                    r.setReviewedAt(LocalDateTime.now());
+                }
+
+                timeSheetReviewRepo.saveAll(existingReviews);
             }
-        });
-
-        timeSheetRepo.saveAll(timeSheets);
-
-        // ✅ Step 8: Create/update weekly review
-        review.setWeekInfo(commonWeek);
-        review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
-        review.setSubmittedAt(LocalDateTime.now());
-        review.setReviewedAt(LocalDateTime.now());
-        review.setUserId(userId);
-        weeklyReviewRepo.save(review);
 
         String monthName = commonWeek.getStartDate()
                 .getMonth()

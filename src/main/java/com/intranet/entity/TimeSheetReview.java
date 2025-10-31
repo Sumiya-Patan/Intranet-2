@@ -39,7 +39,7 @@ public class TimeSheetReview {
     private LocalDateTime reviewedAt;
 
     public enum Status {
-        APPROVED, REJECTED
+        APPROVED, REJECTED, PENDING, SUBMITTED
     }
 
 }
