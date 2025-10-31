@@ -118,6 +118,15 @@ public class TimeSheetController {
 
         if (entries == null || entries.isEmpty())
             return ResponseEntity.badRequest().body("TimeSheet entries cannot be empty");
+        
+        // 🔹 Step 1.1: Validate workDate belongs to current month
+        LocalDate now = LocalDate.now();
+        LocalDate firstDayOfMonth = now.withDayOfMonth(1);
+        LocalDate lastDayOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+
+        if (workDate.isBefore(firstDayOfMonth) || workDate.isAfter(lastDayOfMonth)) {
+            return ResponseEntity.badRequest().body("Work date must belong to the current month.");
+        }
 
         // 🔹 Step 2: Build auth headers
         HttpEntity<Void> entity = buildEntityWithAuth();
