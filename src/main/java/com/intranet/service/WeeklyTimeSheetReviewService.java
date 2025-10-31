@@ -237,12 +237,10 @@ public class WeeklyTimeSheetReviewService {
                 .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
 
         return String.format(
-                "Timesheets submitted successfully for week %d of %s %d (Total worked: %.2f hrs, Required: %.2f hrs)",
+                "Timesheets submitted successfully for week %d of %s %d.",
                 commonWeek.getWeekNo(),
                 monthName,
-                commonWeek.getYear(),
-                totalWorked,
-                requiredHours
+                commonWeek.getYear()
         );
         }
 
