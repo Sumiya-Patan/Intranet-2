@@ -303,7 +303,7 @@ public class WeeklySummaryService {
         if (anyRejected) weekDTO.setWeeklyStatus("REJECTED");
         else if (allApproved) weekDTO.setWeeklyStatus("APPROVED");
         else if (anyApproved) weekDTO.setWeeklyStatus("PARTIALLY APPROVED");
-        else weekDTO.setWeeklyStatus("DRAFT/SUBMITTED");
+        else weekDTO.setWeeklyStatus("SUBMITTED");
 
         return weekDTO;
         }
