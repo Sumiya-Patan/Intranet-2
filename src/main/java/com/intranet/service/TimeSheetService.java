@@ -334,9 +334,9 @@ public class TimeSheetService {
     }
 
     @Transactional
-    public String deleteEntries(DeleteTimeSheetEntriesRequest request) {
-        TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
-                .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
+    public String deleteEntries(Long timesheetId,DeleteTimeSheetEntriesRequest request) {
+        TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+                .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + timesheetId));
 
         // Filter entries that belong to this timesheet and need to be deleted
         List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()

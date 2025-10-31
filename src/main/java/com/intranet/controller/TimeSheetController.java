@@ -4,6 +4,7 @@ package com.intranet.controller;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -263,11 +264,11 @@ public class TimeSheetController {
     }
      
     
-    @DeleteMapping("/deleteEntries")
+    @DeleteMapping("/deleteEntries/{timesheetId}")
     @Operation(summary = "Delete specific entries from a timesheet")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
-    public ResponseEntity<String> deleteEntries(@RequestBody DeleteTimeSheetEntriesRequest request) {
-        String message = timeSheetService.deleteEntries(request);
+    public ResponseEntity<String> deleteEntries(@PathVariable Long timesheetId,@RequestBody DeleteTimeSheetEntriesRequest request) {
+        String message = timeSheetService.deleteEntries(timesheetId,request);
         return ResponseEntity.ok(message);
     }
     

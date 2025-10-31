@@ -7,6 +7,5 @@ import lombok.Data;
 
 @Data
 public class DeleteTimeSheetEntriesRequest {
-    private Long timeSheetId;
     private List<Long> entryIds;
 }
