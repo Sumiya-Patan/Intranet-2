@@ -279,7 +279,7 @@ public class WeeklySummaryService {
         );
 
         WeekSummaryDTO weekDTO = new WeekSummaryDTO();
-        weekDTO.setWeekId(week.getId());
+        weekDTO.setWeekId(week.getWeekNo().longValue());
         weekDTO.setStartDate(week.getStartDate());
         weekDTO.setEndDate(week.getEndDate());
         // 🔸 Validation: No timesheets found for this week
@@ -308,5 +308,61 @@ public class WeeklySummaryService {
         return weekDTO;
         }
     }
-    
+
+    @Transactional
+    public WeeklySummaryDTO getUserWeeklyTimeSheetHistoryRange(Long userId, LocalDate startDate, LocalDate endDate) {
+        LocalDate now = LocalDate.now();
+
+        // ✅ If no start/end provided, use current month
+        LocalDate effectiveStart = (startDate != null) ? startDate : now.withDayOfMonth(1);
+        LocalDate effectiveEnd = (endDate != null) ? endDate : now.withDayOfMonth(now.lengthOfMonth());
+
+        // Fetch all weeks overlapping the range (startDate >= start, endDate <= end)
+        List<WeekInfo> weeks = weekInfoRepo
+                .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(effectiveStart, effectiveEnd);
+
+        if (weeks.isEmpty()) {
+            WeeklySummaryDTO empty = new WeeklySummaryDTO();
+            empty.setUserId(userId);
+            empty.setWeeklySummary(Collections.emptyList());
+            return empty;
+        }
+
+        List<Long> weekIds = weeks.stream().map(WeekInfo::getId).toList();
+
+        List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(userId, weekIds);
+
+        if (timesheets.isEmpty()) {
+            WeeklySummaryDTO empty = new WeeklySummaryDTO();
+            empty.setUserId(userId);
+            empty.setWeeklySummary(Collections.emptyList());
+            return empty;
+        }
+
+        // ✅ Fetch project info
+        String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                projectsUrl,
+                HttpMethod.GET,
+                buildEntityWithAuth(),
+                new ParameterizedTypeReference<>() {}
+        );
+
+        List<Map<String, Object>> projects = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+        Map<Long, Map<String, Object>> projectMap = projects.stream()
+                .collect(Collectors.toMap(p -> ((Number) p.get("id")).longValue(), p -> p));
+
+        // ✅ Build week summaries
+        List<WeekSummaryDTO> weeklySummaries = weeks.stream()
+        .map(week -> buildWeekSummary(week, timesheets, projectMap))
+        .sorted(Comparator.comparing(WeekSummaryDTO::getStartDate).reversed()) // current month → past
+        .toList();
+
+
+        WeeklySummaryDTO summary = new WeeklySummaryDTO();
+        summary.setUserId(userId);
+        summary.setWeeklySummary(weeklySummaries);
+        return summary;
+    }
+
 }
