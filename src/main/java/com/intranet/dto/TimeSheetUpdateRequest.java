@@ -8,7 +8,6 @@ import java.util.List;
 
 @Data
 public class TimeSheetUpdateRequest {
-    private Long timeSheetId;
     private List<EntryUpdateDto> entries;
 
     @Data

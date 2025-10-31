@@ -273,11 +273,11 @@ public class TimeSheetController {
     }
     
     
-    @PutMapping("/updateEntries")
+    @PutMapping("/updateEntries/{timesheetId}")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     @Operation(summary = "Update multiple entries in a timesheet")
-    public ResponseEntity<String> updateEntries(@RequestBody TimeSheetUpdateRequest request) {
-        String message = timeSheetService.updateEntries(request);
+    public ResponseEntity<String> updateEntries(@PathVariable Long timesheetId,@RequestBody TimeSheetUpdateRequest request) {
+        String message = timeSheetService.updateEntries(timesheetId,request);
         return ResponseEntity.ok(message);
     }
 

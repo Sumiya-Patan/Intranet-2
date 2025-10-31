@@ -599,10 +599,10 @@ public class TimeSheetService {
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
     @Transactional
-    public String updateEntries(TimeSheetUpdateRequest request) {
+    public String updateEntries(Long timesheetId,TimeSheetUpdateRequest request) {
 
-    TimeSheet timeSheet = timeSheetRepository.findById(request.getTimeSheetId())
-            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + request.getTimeSheetId()));
+    TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + timesheetId));
 
     BigDecimal totalHours = BigDecimal.ZERO;
 
