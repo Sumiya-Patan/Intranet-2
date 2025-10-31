@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 
 import com.intranet.entity.WeeklyTimeSheetReview;
+import com.intranet.entity.WeeklyTimeSheetReview.Status;
 
 @Repository
 public interface WeeklyTimeSheetReviewRepo extends JpaRepository<WeeklyTimeSheetReview, Long>{
@@ -17,4 +18,6 @@ public interface WeeklyTimeSheetReviewRepo extends JpaRepository<WeeklyTimeSheet
 
     List<WeeklyTimeSheetReview> findByUserIdAndWeekInfo_StartDateBetween(Long userId, LocalDate startDate,
             LocalDate endDate);
+    
+    boolean existsByUserIdAndWeekInfoIdAndStatus(Long userId, Long weekInfoId, Status status);
 }

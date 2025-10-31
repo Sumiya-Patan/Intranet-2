@@ -20,7 +20,11 @@ import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.entity.TimeSheet;
+import com.intranet.entity.WeekInfo;
+import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.HolidayExcludeUsersRepo;
+import com.intranet.repository.WeekInfoRepo;
+import com.intranet.repository.WeeklyTimeSheetReviewRepo;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.TimeSheetService;
@@ -32,6 +36,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +61,13 @@ public class TimeSheetController {
 
     @Autowired
     private HolidayExcludeUsersRepo holidayExcludeUsersRepo;
+
+    @Autowired
+    private WeekInfoRepo weekInfoRepo;
+
+    @Autowired
+    private WeeklyTimeSheetReviewRepo weeklyTimeSheetReviewRepo;
+
 
     private HttpEntity<Void> buildEntityWithAuth() {
 
@@ -97,7 +109,7 @@ public class TimeSheetController {
         }
     }
     return hours * 60 + minutes;
-}
+    }
 
 
     @PostMapping("/create")
@@ -127,6 +139,26 @@ public class TimeSheetController {
         if (workDate.isBefore(firstDayOfMonth) || workDate.isAfter(lastDayOfMonth)) {
             return ResponseEntity.badRequest().body("Work date must belong to the current month.");
         }
+
+        // 🔹 Step 1.2: Validate that the week is not approved
+        Optional<WeekInfo> optionalWeekInfo = weekInfoRepo
+                .findByStartDateLessThanEqualAndEndDateGreaterThanEqual(workDate, workDate);
+
+        if (optionalWeekInfo.isPresent()) {
+            WeekInfo weekInfo = optionalWeekInfo.get();
+            boolean isApproved = weeklyTimeSheetReviewRepo.existsByUserIdAndWeekInfoIdAndStatus(
+                currentUser.getId(),
+                weekInfo.getId(),
+                WeeklyTimeSheetReview.Status.APPROVED
+            );
+
+            if (isApproved) {
+                return ResponseEntity.badRequest()
+                    .body("Cannot submit timesheet. Week " + weekInfo.getWeekNo() + " is already approved.");
+            }
+        }
+
+
 
         // 🔹 Step 2: Build auth headers
         HttpEntity<Void> entity = buildEntityWithAuth();
