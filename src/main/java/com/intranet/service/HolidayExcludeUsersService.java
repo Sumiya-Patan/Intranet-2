@@ -89,7 +89,7 @@ public class HolidayExcludeUsersService {
                 url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
 
         List<HolidayDTO> lmsHolidays = response.getBody();
-        if (lmsHolidays == null || lmsHolidays.isEmpty()) {
+        if (lmsHolidays == null) {
             throw new IllegalArgumentException("Failed to fetch holidays from LMS.");
         }
 
