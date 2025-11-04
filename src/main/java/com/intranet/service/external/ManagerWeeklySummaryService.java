@@ -79,7 +79,7 @@ public class ManagerWeeklySummaryService {
     if (filteredSheets.isEmpty()) return Collections.emptyList();
 
     // Step 4: Filter timesheets where manager has at least one project entry
-    List<TimeSheet> managerSheets = allSheets.stream()
+    List<TimeSheet> managerSheets = filteredSheets.stream()
             .filter(ts -> ts.getEntries().stream()
                     .anyMatch(e -> projects.stream()
                             .anyMatch(p -> ((Number)p.get("id")).longValue() == e.getProjectId())))
