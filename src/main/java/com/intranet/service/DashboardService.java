@@ -2,6 +2,7 @@ package com.intranet.service;
 
 import com.intranet.entity.*;
 import com.intranet.repository.TimeSheetRepo;
+import com.intranet.repository.WeekInfoRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +26,7 @@ public class DashboardService {
 
     private final TimeSheetRepo timeSheetRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
+    private final WeekInfoRepo weekInfoRepo;
     private final RestTemplate restTemplate = new RestTemplate();
 
     @Value("${pms.api.base-url}")
@@ -211,55 +213,46 @@ public class DashboardService {
     // ✅ Week-based Review Summary (using WeekInfo & WeekTimeSheetReview)
     public Map<String, Object> getWeeklySummary(Long userId, LocalDate startDate, LocalDate endDate) {
 
-        List<WeeklyTimeSheetReview> reviews =
-                weeklyReviewRepo.findByUserIdAndWeekInfo_StartDateBetween(userId, startDate, endDate);
+    // 1️⃣ Fetch all week ranges between start and end date
+    List<WeekInfo> allWeeks = weekInfoRepo.findByStartDateBetween(startDate, endDate);
 
-        if (reviews.isEmpty()) {
-            return Map.of(
-                    "submittedWeeks", 0L,
-                    "approvedWeeks", 0L,
-                    "rejectedWeeks", 0L,
-                    "weekDetails", List.of()
-            );
-        }
+    // 2️⃣ Fetch only the existing weekly reviews for this user
+    List<WeeklyTimeSheetReview> reviews =
+            weeklyReviewRepo.findByUserIdAndWeekInfo_StartDateBetween(userId, startDate, endDate);
 
-        Map<WeekInfo, List<WeeklyTimeSheetReview>> grouped = reviews.stream()
-                .collect(Collectors.groupingBy(WeeklyTimeSheetReview::getWeekInfo));
-
-        List<Map<String, Object>> weekDetails = new ArrayList<>();
-        long submitted = 0, approved = 0, rejected = 0;
-
-        for (var entry : grouped.entrySet()) {
-            WeekInfo week = entry.getKey();
-            List<String> statuses = entry.getValue().stream()
-                    .map(r -> r.getStatus().name())
-                    .toList();
-
-            String finalStatus;
-            if (statuses.contains("REJECTED")) {
-                finalStatus = "REJECTED"; rejected++;
-            } else if (statuses.stream().allMatch(s -> s.equals("APPROVED"))) {
-                finalStatus = "APPROVED"; approved++;
-            } else {
-                finalStatus = "SUBMITTED"; submitted++;
-            }
-
-            weekDetails.add(Map.of(
-                    "weekNumber", week.getWeekNo(),
-                    "year", week.getYear(),
-                    "startDate", week.getStartDate(),
-                    "endDate", week.getEndDate(),
-                    "status", finalStatus
+    // 3️⃣ Map weekId → list of statuses
+    Map<Long, List<WeeklyTimeSheetReview.Status>> reviewMap = reviews.stream()
+            .collect(Collectors.groupingBy(
+                    r -> r.getWeekInfo().getId(),
+                    Collectors.mapping(WeeklyTimeSheetReview::getStatus, Collectors.toList())
             ));
-        }
 
-        return Map.of(
-                "submittedWeeks", submitted,
-                "approvedWeeks", approved,
-                "rejectedWeeks", rejected,
-                "weekDetails", weekDetails
-        );
+    long submitted = 0, approved = 0, rejected = 0, notSubmitted = 0;
+
+    // 4️⃣ Loop through all week infos (including those without reviews)
+    for (WeekInfo week : allWeeks) {
+        List<WeeklyTimeSheetReview.Status> statuses = reviewMap.get(week.getId());
+
+        if (statuses == null || statuses.isEmpty()) {
+            notSubmitted++;
+        } else if (statuses.contains(WeeklyTimeSheetReview.Status.REJECTED)) {
+            rejected++;
+        } else if (statuses.stream().allMatch(s -> s == WeeklyTimeSheetReview.Status.APPROVED)) {
+            approved++;
+        } else {
+            submitted++;
+        }
     }
+
+    // 5️⃣ Return only summary counts
+    return Map.of(
+            "submittedWeeks", submitted,
+            "approvedWeeks", approved,
+            "rejectedWeeks", rejected,
+            "notSubmittedWeeks", notSubmitted
+    );
+    }
+
 
     // ✅ Utility Helpers
     private BigDecimal formatHours(BigDecimal value) {
