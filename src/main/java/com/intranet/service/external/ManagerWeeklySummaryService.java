@@ -1,6 +1,7 @@
 package com.intranet.service.external;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +50,10 @@ public class ManagerWeeklySummaryService {
     headers.set("Authorization", authHeader);
     HttpEntity<Void> entity = new HttpEntity<>(headers);
 
+    // Step 0: Define current month's range
+    LocalDate now = LocalDate.now();
+    LocalDate startOfMonth = now.withDayOfMonth(1);
+    LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
     // Step 1: Get all projects owned by this manager
     String url = String.format("%s/projects/owner", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
@@ -66,6 +71,12 @@ public class ManagerWeeklySummaryService {
     // Step 3: Fetch all non-draft timesheets of these members
     List<TimeSheet> allSheets = timeSheetRepository.findNonDraftByUserIds(memberIds);
     if (allSheets.isEmpty()) return Collections.emptyList();
+    
+    // ✅ Step 3.1: Filter timesheets within the current month
+    List<TimeSheet> filteredSheets = allSheets.stream()
+            .filter(ts -> !ts.getWorkDate().isBefore(startOfMonth) && !ts.getWorkDate().isAfter(endOfMonth))
+            .collect(Collectors.toList());
+    if (filteredSheets.isEmpty()) return Collections.emptyList();
 
     // Step 4: Filter timesheets where manager has at least one project entry
     List<TimeSheet> managerSheets = allSheets.stream()

@@ -102,5 +102,8 @@ public class HolidayInfoController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body("⚠️ " + e.getMessage());
         }
+        catch (Exception e) {
+            return ResponseEntity.badRequest().body("⚠️ " + e.getMessage());
+        }
     }
 }

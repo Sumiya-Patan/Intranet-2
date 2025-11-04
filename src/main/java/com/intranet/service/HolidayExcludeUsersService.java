@@ -85,12 +85,25 @@ public class HolidayExcludeUsersService {
 
         // Step 1: Fetch holidays from LMS
         String url = String.format("%s/api/holidays/month/%d", lmsBaseUrl, month);
-        ResponseEntity<List<HolidayDTO>> response = restTemplate.exchange(
-                url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
 
+        ResponseEntity<List<HolidayDTO>> response;
+        try {
+            response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    new ParameterizedTypeReference<List<HolidayDTO>>() {}
+            );
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to fetch holidays from LMS for month: " + month, e);
+        }
+
+        // ✅ Handle empty or missing holiday list
         List<HolidayDTO> lmsHolidays = response.getBody();
-        if (lmsHolidays == null) {
-            throw new IllegalArgumentException("Failed to fetch holidays from LMS.");
+
+        // ✅ If holidays list is empty, allow method to continue normally
+        if (lmsHolidays.isEmpty()) {
+            return Collections.emptyList(); // or skip return, depending on your flow
         }
 
         // 🔹 Step 2: Get excluded holidays for this user
