@@ -2,8 +2,10 @@ package com.intranet.repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import com.intranet.entity.TimeSheetReview;
@@ -18,5 +20,12 @@ public interface TimeSheetReviewRepo  extends JpaRepository<TimeSheetReview, Lon
     List<TimeSheetReview> findByTimeSheet_Id(Long id);
 
     List<TimeSheetReview> findByTimeSheet_IdIn(List<Long> timeSheetIds);
+
+    @Query("SELECT DISTINCT r.weekInfo.id FROM TimeSheetReview r " +
+           "WHERE r.managerId = :managerId " +
+           "AND r.status IN :statuses")
+    List<Long> findDistinctWeekIdsByManagerIdAndStatusIn(Long managerId, List<TimeSheetReview.Status> statuses);
+
+    List<TimeSheetReview> findByManagerIdAndWeekInfo_IdIn(Long id, Set<Long> submittedWeekIds);
 
 }
