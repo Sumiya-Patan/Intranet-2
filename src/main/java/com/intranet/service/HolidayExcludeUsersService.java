@@ -112,15 +112,47 @@ public class HolidayExcludeUsersService {
                 .map(HolidayExcludeUsers::getHolidayDate)
                 .collect(Collectors.toSet());
 
-        // 🔹 Step 3: Build manager info map for excluded holidays
-    Map<LocalDate, List<ManagerInfoDTO>> managerMap = excluded.stream()
-            .collect(Collectors.groupingBy(
-                    HolidayExcludeUsers::getHolidayDate,
-                    Collectors.mapping(ex -> new ManagerInfoDTO(
-                            ex.getManagerId(),
-                            getManagerName(ex.getManagerId(), entity) // fetch name
-                    ), Collectors.toList())
-            ));
+            // 🔹 Step 2: Preload all users (including managers) from UMS to avoid repeated calls
+        Map<Long, String> userCache = new HashMap<>();
+        try {
+            String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+            ResponseEntity<Map<String, Object>> umsResponse = restTemplate.exchange(
+                    umsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> body = umsResponse.getBody();
+            if (body != null && body.containsKey("users")) {
+                Object usersObj = body.get("users");
+                if (usersObj instanceof List<?>) {
+                    for (Object obj : (List<?>) usersObj) {
+                        if (obj instanceof Map) {
+                            Map<?, ?> u = (Map<?, ?>) obj;
+                            Number idNum = (Number) u.get("user_id");
+                            if (idNum != null) {
+                                Long id = idNum.longValue();
+                                String firstName = u.get("first_name") != null ? u.get("first_name").toString().trim() : "";
+                                String lastName  = u.get("last_name")  != null ? u.get("last_name").toString().trim()  : "";
+                                String fullName  = (firstName + " " + lastName).trim();
+                                userCache.put(id, fullName.isEmpty() ? "Unknown User" : fullName);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to load users from UMS: " + e.getMessage());
+        }
+
+        // 🔹 Step 3: Build manager info map using cached names
+        Map<LocalDate, List<ManagerInfoDTO>> managerMap = excluded.stream()
+                .collect(Collectors.groupingBy(
+                        HolidayExcludeUsers::getHolidayDate,
+                        Collectors.mapping(ex -> new ManagerInfoDTO(
+                                ex.getManagerId(),
+                                userCache.getOrDefault(ex.getManagerId(), "Unknown Manager")
+                        ), Collectors.toList())
+                ));
+
 
     // 🔹 Step 4: Build final response
     return lmsHolidays.stream()
@@ -142,25 +174,6 @@ public class HolidayExcludeUsersService {
             })
             .toList();
     }
-    private String getManagerName(Long managerId, HttpEntity<Void> entity) {
-
-    try {
-        
-        String url = String.format("%s/admin/users/%d", umsBaseUrl, managerId);
-        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-
-        Map<String, Object> data = response.getBody();
-        if (data != null) {
-            String firstName = (String) data.get("first_name");
-            String lastName = (String) data.get("last_name");
-            return (firstName + " " + (lastName != null ? lastName : "")).trim();
-        }
-    } catch (Exception e) {
-        // Fallback if not found or API error
-    }
-    return "Unknown Manager";
-    }
 
     public List<HolidayExcludeResponseDTO> getAllByManager(Long managerId) {
     List<HolidayExcludeUsers> users = repository.findByManagerId(managerId);
@@ -170,9 +183,40 @@ public class HolidayExcludeUsersService {
 
     HttpEntity<Void> entity = buildEntityWithAuth();
 
-    // Cache to avoid multiple UMS calls for same user
+    /// --- Cache to avoid multiple UMS calls for the same user ---
     Map<Long, String> userCache = new HashMap<>();
 
+    // 🧠 Pre-fetch all required users from UMS in one go
+    try {
+        String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+        ResponseEntity<Map<String, Object>> umsResponse = restTemplate.exchange(
+                umsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+
+        Map<String, Object> body = umsResponse.getBody();
+        if (body != null && body.containsKey("users")) {
+            Object usersObj = body.get("users");
+            if (usersObj instanceof List<?>) {
+                for (Object obj : (List<?>) usersObj) {
+                    if (obj instanceof Map) {
+                        Map<?, ?> u = (Map<?, ?>) obj;
+                        Number idNum = (Number) u.get("user_id");
+                        if (idNum != null) {
+                            Long id = idNum.longValue();
+                            String firstName = u.get("first_name") != null ? u.get("first_name").toString().trim() : "";
+                            String lastName  = u.get("last_name")  != null ? u.get("last_name").toString().trim()  : "";
+                            String fullName  = (firstName + " " + lastName).trim();
+                            userCache.put(id, fullName.isEmpty() ? "Unknown User" : fullName);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (Exception e) {
+        System.err.println("⚠️ Failed to prefetch users from UMS: " + e.getMessage());
+    }
+
+    // --- Now build the DTO list ---
     return users.stream().map(user -> {
         HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
         dto.setId(user.getId());
@@ -181,35 +225,13 @@ public class HolidayExcludeUsersService {
         dto.setHolidayDate(user.getHolidayDate());
         dto.setReason(user.getReason());
 
-        // Fetch username from cache or call UMS
-        String userName = userCache.computeIfAbsent(
-            user.getUserId(),
-            id -> getUserNameFromUMS(id, entity)
-        );
+        // ✅ Get username from cache (no UMS call here)
+        String userName = userCache.getOrDefault(user.getUserId(), "Unknown User");
         dto.setUserName(userName);
 
         return dto;
-    }).collect(Collectors.toList());
-    }
-    private String getUserNameFromUMS(Long userId, HttpEntity<Void> entity) {
-    try {
-        String url = String.format("%s/admin/users/%d", umsBaseUrl, userId);
-        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
-        );
-
-        Map<String, Object> data = response.getBody();
-        if (data != null) {
-            String firstName = (String) data.get("first_name");
-            String lastName = (String) data.get("last_name");
-            return (firstName != null ? firstName : "") + 
-                   (lastName != null ? " " + lastName : "");
+        }).collect(Collectors.toList());
         }
-    } catch (Exception e) {
-        System.err.println("⚠️ Failed to fetch username for userId=" + userId + ": " + e.getMessage());
-    }
-    return "Unknown User";
-    }
 
 
 

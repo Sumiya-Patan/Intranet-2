@@ -62,8 +62,8 @@ public class WeeklySummaryService {
 
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
-    @Value("${ums.api.base-url}")
-    private String umsBaseUrl;
+    // @Value("${ums.api.base-url}")
+    // private String umsBaseUrl;
      private final RestTemplate restTemplate = new RestTemplate();
 
     private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;

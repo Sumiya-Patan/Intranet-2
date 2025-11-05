@@ -107,30 +107,53 @@ public class ManagerSummaryController {
             return ResponseEntity.ok(emptySummary(startDate, endDate));
         }
 
-        // Build UMS user cache (names + emails)
+        // --- Step: Build UMS user cache (names + emails) ---
         Map<Long, String> userCacheFullName = new HashMap<>();
         Map<Long, String> userCacheEmail = new HashMap<>();
 
-        for (Long userId : memberIds) {
-            String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
-            try {
-                ResponseEntity<Map<String, Object>> userResponse = restTemplate.exchange(
-                        userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {});
-                Map<String, Object> userData = userResponse.getBody();
-                if (userData != null) {
-                    String firstName = (String) userData.get("first_name");
-                    String lastName = (String) userData.get("last_name");
-                    String email = (String) userData.get("mail");
+        try {
+            String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
 
-                    String fullName = ((firstName != null ? firstName : "") + " " +
-                            (lastName != null ? lastName : "")).trim();
-                    userCacheFullName.put(userId, fullName.isEmpty() ? "Unknown" : fullName);
-                    userCacheEmail.put(userId, email != null ? email : "unknown@example.com");
+            ResponseEntity<Map<String, Object>> umsResponse = restTemplate.exchange(
+                    umsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            Map<String, Object> umsBody = umsResponse.getBody();
+
+            if (umsBody != null && umsBody.containsKey("users")) {
+                Object usersObj = umsBody.get("users");
+
+                if (usersObj instanceof List<?>) {
+                    List<?> userList = (List<?>) usersObj;
+
+                    for (Object obj : userList) {
+                        if (!(obj instanceof Map)) continue;
+
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> userMap = (Map<String, Object>) obj;
+
+                        Number idNum = (Number) userMap.get("user_id");
+                        if (idNum == null) continue;
+
+                        Long userId = idNum.longValue();
+                        String firstName = (String) userMap.getOrDefault("first_name", "");
+                        String lastName = (String) userMap.getOrDefault("last_name", "");
+                        String email = (String) userMap.getOrDefault("mail", "unknown@example.com");
+
+                        String fullName = (firstName + " " + lastName).trim();
+
+                        userCacheFullName.put(userId, fullName.isEmpty() ? "Unknown" : fullName);
+                        userCacheEmail.put(userId, email);
+                    }
                 }
-            } catch (Exception e) {
-                userCacheFullName.put(userId, "User not found in UMS");
-                userCacheEmail.put(userId, "unknown@example.com");
             }
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to load users from UMS: " + e.getMessage());
+        }
+
+        // ✅ Fallback for any missing users
+        for (Long userId : memberIds) {
+            userCacheFullName.putIfAbsent(userId, "Unknown");
+            userCacheEmail.putIfAbsent(userId, "unknown@example.com");
         }
 
         // Fetch all timesheets

@@ -79,31 +79,70 @@ public class ManagerTimeSheetController {
         return ResponseEntity.ok(Collections.emptyList());
     }
 
-    // Step 4: Build user details by calling UMS API
+    @SuppressWarnings("unchecked")
     List<Map<String, Object>> users = new ArrayList<>();
-    for (Long userId : memberIds) {
-        String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, userId);
-        try {
-            ResponseEntity<Map<String, Object>> userResponse =
-                    restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-            Map<String, Object> userMap = userResponse.getBody();
-            if (userMap != null) {
-                Map<String, Object> userInfo = new HashMap<>();
-                userInfo.put("id", userId);
-                userInfo.put("firstName", userMap.getOrDefault("first_name", ""));
-                userInfo.put("lastName", userMap.getOrDefault("last_name", ""));
-                userInfo.put("email", userMap.getOrDefault("mail", ""));
-                userInfo.put("fullName", userMap.getOrDefault("first_name", "") + " " + userMap.getOrDefault("last_name", ""));
-                users.add(userInfo);
+
+    Map<Long, Map<String, Object>> userCache = new HashMap<>();
+
+    try {
+        // 🔹 Bulk fetch all users (adjust page/limit as needed)
+        String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+        ResponseEntity<Map<String, Object>> umsResponse = restTemplate.exchange(
+                umsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {});
+
+        Map<String, Object> body = umsResponse.getBody();
+        if (body != null && body.containsKey("users")) {
+            Object usersObj = body.get("users");
+            if (usersObj instanceof List<?>) {
+                List<?> list = (List<?>) usersObj;
+                for (Object obj : list) {
+                    if (obj instanceof Map<?, ?>) {
+                        Map<String, Object> u = (Map<String, Object>) obj;
+
+                        Number idNum = (Number) u.get("user_id");
+                        if (idNum != null) {
+                            Long id = idNum.longValue();
+
+                            String firstName = u.get("first_name") != null ? (String) u.get("first_name") : "";
+                            String lastName  = u.get("last_name")  != null ? (String) u.get("last_name")  : "";
+                            String email     = u.get("mail")       != null ? (String) u.get("mail")       : "";
+
+                            Map<String, Object> info = new HashMap<>();
+                            info.put("firstName", firstName);
+                            info.put("lastName", lastName);
+                            info.put("email", email);
+                            info.put("fullName", (firstName + " " + lastName).trim());
+
+                            userCache.put(id, info);
+                        }
+                    }
+                }
             }
-        } catch (Exception e) {
-            // fallback if user not found in UMS
-            Map<String, Object> fallback = new HashMap<>();
-            fallback.put("id", userId);
-            fallback.put("fullName", "User not found in UMS");
-            users.add(fallback);
         }
+    } catch (Exception e) {
+        System.err.println("⚠️ Failed to load users from UMS: " + e.getMessage());
     }
+
+    // --- 🔹 Build final user list from team members ---
+    for (Long userId : memberIds) {
+        Map<String, Object> info = userCache.get(userId);
+        Map<String, Object> userN = new HashMap<>();
+
+        userN.put("id", userId);
+
+        if (info != null) {
+            userN.putAll(info);
+        } else {
+            userN.put("firstName", "");
+            userN.put("lastName", "");
+            userN.put("email", "unknown@example.com");
+            userN.put("fullName", "User not found in UMS");
+        }
+
+        users.add(userN);
+    }
+
+
 
     return ResponseEntity.ok(users);
     }

@@ -87,23 +87,44 @@ public class ManagerWeeklySummaryService {
 
     if (managerSheets.isEmpty()) return Collections.emptyList();
 
-    // Step 5: Fetch usernames from UMS
-    Map<Long, String> userCache = new HashMap<>();
-    for (Long uid : memberIds) {
-        String userUrl = String.format("%s/admin/users/%d", umsBaseUrl, uid);
+        // Step 5: Fetch all users in one call from UMS and cache them
+        Map<Long, Map<String, Object>> userCache = new HashMap<>();
         try {
-            ResponseEntity<Map<String, Object>> userResponse =
-                    restTemplate.exchange(userUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-            Map<String, Object> userMap = userResponse.getBody();
-            if (userMap != null) {
-                String firstName = (String) userMap.get("first_name");
-                String lastName = (String) userMap.get("last_name");
-                userCache.put(uid, (firstName != null ? firstName : "") + " " + (lastName != null ? lastName : ""));
-            }
-        } catch (Exception e) {
-            userCache.put(uid, "Unknown User");
+        String allUsersUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+        ResponseEntity<Map<String, Object>> userResponse =
+                restTemplate.exchange(allUsersUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+        
+        Map<String, Object> responseBody = userResponse.getBody();
+        if (responseBody != null && responseBody.containsKey("users")) {
+                List<Map<String, Object>> users = (List<Map<String, Object>>) responseBody.get("users");
+                for (Map<String, Object> user : users) {
+                Long id = ((Number) user.get("user_id")).longValue();
+                userCache.put(id, user);
+                }
         }
-    }
+        } catch (Exception e) {
+        e.printStackTrace(); // optionally log with logger.warn("Failed to load users", e)
+        }
+        Map<Long, String> userNameCache = new HashMap<>();
+        Map<Long, String> userEmailCache = new HashMap<>();
+
+        for (Long uid : memberIds) {
+        Map<String, Object> user = userCache.get(uid);
+        if (user != null) {
+                String firstName = (String) user.getOrDefault("first_name", "");
+                String lastName = (String) user.getOrDefault("last_name", "");
+                String fullName = (firstName + " " + lastName).trim();
+                String email = (String) user.getOrDefault("mail", "unknown@example.com");
+
+                userNameCache.put(uid, fullName.isEmpty() ? "Unknown User" : fullName);
+                userEmailCache.put(uid, email);
+        } else {
+                userNameCache.put(uid, "Unknown User");
+                userEmailCache.put(uid, "unknown@example.com");
+        }
+}
+
+
 
     // Step 6: Group by userId and build weekly summary
     return managerSheets.stream()
@@ -161,11 +182,19 @@ public class ManagerWeeklySummaryService {
                 
                 ManagerWeeklySummaryDTO managerDTO = new ManagerWeeklySummaryDTO();
                 managerDTO.setUserId(userId);
-                managerDTO.setUserName(userCache.getOrDefault(userId, "Unknown"));
+                Map<String, Object> user = userCache.get(userId);
+                String fullName = "Unknown";
+                if (user != null) {
+                String firstName = (String) user.getOrDefault("first_name", "");
+                String lastName = (String) user.getOrDefault("last_name", "");
+                fullName = (firstName + " " + lastName).trim();
+                }
+                managerDTO.setUserName(fullName);
+
                 managerDTO.setWeeklySummary(weekSummaries);
                 return managerDTO;
             }).toList();
-}
+ }
 
 /**
  * Map timesheet to DTO for a specific manager.
