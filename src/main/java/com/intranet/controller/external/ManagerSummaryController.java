@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -76,7 +77,8 @@ public class ManagerSummaryController {
 
         LocalDate today = LocalDate.now();
         if (startDate == null) startDate = today.withDayOfMonth(1);
-        if (endDate == null) endDate = today;
+        if (endDate == null) endDate = today.with(TemporalAdjusters.lastDayOfMonth());
+
 
         // Forward Authorization header
         String authHeader = request.getHeader("Authorization");
@@ -179,24 +181,53 @@ public class ManagerSummaryController {
                         .multiply(BigDecimal.valueOf(100)).doubleValue()
                 : 0.0;
 
-        // 🕓 Pending weeks (submitted but not reviewed)
-        List<WeeklyTimeSheetReview> submittedWeeks = weeklyReviewRepo
-                .findByUserIdInAndWeekInfo_StartDateBetween(memberIds, startDate, endDate);
+       
+        // 1️⃣ Filter only SUBMITTED or PARTIALLY_APPROVED
+        List<TimeSheet> relevantSheets = teamSheets.stream()
+                .filter(ts -> {
+                String status = ts.getStatus().name();
+                return "SUBMITTED".equalsIgnoreCase(status)
+                        || "PARTIALLY_APPROVED".equalsIgnoreCase(status);
+                })
+                .collect(Collectors.toList());
 
-        Set<Long> submittedWeekIds = submittedWeeks.stream()
-                .map(w -> w.getWeekInfo().getId())
+        int pendingCount;
+        if (relevantSheets.isEmpty()) {
+        pendingCount = 0;
+        } else {
+        // 2️⃣ Extract all week IDs involved
+        Set<Long> weekIds = relevantSheets.stream()
+                .map(ts -> ts.getWeekInfo().getId())
                 .collect(Collectors.toSet());
 
-        List<TimeSheetReview> reviewedWeeks = timeSheetReviewRepo
-                .findByManagerIdAndWeekInfo_IdIn(user.getId(), submittedWeekIds);
+        // 3️⃣ Fetch all reviews done by this manager for these weeks
+        List<TimeSheetReview> managerReviews = timeSheetReviewRepo
+                .findByManagerIdAndWeekInfo_IdIn(user.getId(), weekIds);
 
-        Set<Long> reviewedWeekIds = reviewedWeeks.stream()
-                .map(r -> r.getWeekInfo().getId())
+        // 4️⃣ Build lookup of already reviewed user-week pairs (only APPROVED/REJECTED are non-pending)
+        Set<String> reviewedKeys = managerReviews.stream()
+                .filter(r -> {
+                        String status = r.getStatus().name();
+                        return status != null && (
+                                status.equalsIgnoreCase("APPROVED") ||
+                                status.equalsIgnoreCase("REJECTED"));
+                })
+                .map(r -> r.getUserId() + "-" + r.getWeekInfo().getId())
                 .collect(Collectors.toSet());
 
-        long pendingCount = submittedWeekIds.stream()
-                .filter(id -> !reviewedWeekIds.contains(id))
-                .count();
+        // 5️⃣ Identify user-week pairs that are pending for this manager
+        Set<String> pendingKeys = relevantSheets.stream()
+                .filter(ts -> {
+                        String key = ts.getUserId() + "-" + ts.getWeekInfo().getId();
+                        return !reviewedKeys.contains(key); // not reviewed yet
+                })
+                .map(ts -> ts.getUserId() + "-" + ts.getWeekInfo().getId())
+                .collect(Collectors.toSet());
+
+        // 6️⃣ Final pending count (unique user-week)
+        pendingCount = pendingKeys.size();
+                }
+
 
         // Missing timesheets
         LocalDate monthStart = today.withDayOfMonth(1);
