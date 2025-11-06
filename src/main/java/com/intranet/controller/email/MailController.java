@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import com.intranet.service.email.EmailService;
 
 @RestController
-@RequestMapping("/api/mail")
+@RequestMapping("/api/timesheet")
 @CrossOrigin(origins = "*",allowedHeaders = "*")
 @RequiredArgsConstructor
 public class MailController {
