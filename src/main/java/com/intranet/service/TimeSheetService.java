@@ -211,39 +211,40 @@ public class TimeSheetService {
     }
 
     @Transactional
-    public String deleteEntries(Long timesheetId,DeleteTimeSheetEntriesRequest request) {
-        TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
-                .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + timesheetId));
+    public String deleteEntries(Long timesheetId, DeleteTimeSheetEntriesRequest request) {
+    TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + timesheetId));
 
-        // Filter entries that belong to this timesheet and need to be deleted
-        List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()
-                .filter(e -> request.getEntryIds().contains(e.getId()))
-                .toList();
+    // Filter entries to delete
+    List<TimeSheetEntry> entriesToDelete = timeSheet.getEntries().stream()
+            .filter(e -> request.getEntryIds().contains(e.getId()))
+            .toList();
 
-        if (entriesToDelete.isEmpty()) {
-            return "No matching entries found to delete.";
-        }
-
-        // Remove entries
-        timeSheet.getEntries().removeAll(entriesToDelete);
-        entryRepository.deleteAll(entriesToDelete);
-
-        // If all entries deleted, delete timesheet itself
-        if (timeSheet.getEntries().isEmpty()) {
-            timeSheetRepository.delete(timeSheet);
-            return "All entries deleted. TimeSheet also removed.";
-        }
-
-        // Recalculate total hours
-        BigDecimal totalHours = timeSheet.getEntries().stream()
-                .map(TimeSheetEntry::getHoursWorked)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        timeSheet.setHoursWorked(totalHours);
-
-        timeSheetRepository.save(timeSheet);
-
-        return "Selected entries deleted. Total hours now: " + totalHours;
+    if (entriesToDelete.isEmpty()) {
+        return "No matching entries found to delete.";
     }
+
+    // Remove entries
+    timeSheet.getEntries().removeAll(entriesToDelete);
+    entryRepository.deleteAll(entriesToDelete);
+
+    // If all entries deleted, delete the timesheet itself
+    if (timeSheet.getEntries().isEmpty()) {
+        timeSheetRepository.delete(timeSheet);
+        return "All entries deleted. TimeSheet also removed.";
+    }
+
+    // ✅ Recalculate total hours safely
+    BigDecimal totalHours = timeSheet.getEntries().stream()
+            .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    timeSheet.setHoursWorked(totalHours);
+    timeSheetRepository.save(timeSheet);
+
+    return "Selected entries deleted. Total hours now: " + totalHours;
+    }
+
 
     private final RestTemplate restTemplate = new RestTemplate();
     @Value("${pms.api.base-url}")
