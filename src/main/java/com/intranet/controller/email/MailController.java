@@ -17,7 +17,7 @@ public class MailController {
 
     private final EmailService emailService;
 
-    @PostMapping("/send-reminder")
+    @PostMapping("/send_reminder")
     public ResponseEntity<String> sendReminders(@RequestBody List<String> emailList) {
         if (emailList == null || emailList.isEmpty()) {
             return ResponseEntity.badRequest().body("Email list cannot be empty ❌");
