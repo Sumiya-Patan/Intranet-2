@@ -43,8 +43,10 @@
 		<groupId>com.unboundid</groupId>
 		<artifactId>unboundid-ldapsdk</artifactId> <!-- or latest -->
 		</dependency>
-
-
+		<dependency>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
 		<dependency>
 		<groupId>com.fasterxml.jackson.core</groupId>
 		<artifactId>jackson-databind</artifactId>
