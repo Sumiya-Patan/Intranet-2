@@ -77,8 +77,8 @@ public class DashboardService {
 
         // 8️⃣ Total Hours + Avg Hours per Day
         BigDecimal totalHours = entries.stream()
-                .map(TimeSheetEntry::getHoursWorked)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
         totalHours = formatHours(totalHours);
 
         long totalDays = timeSheets.stream()
@@ -139,76 +139,105 @@ public class DashboardService {
 
     // ✅ Project Summary
     private List<Map<String, Object>> calculateProjectSummary(List<TimeSheetEntry> entries, Map<Long, String> projectMap) {
-        Map<Long, BigDecimal> projectHours = entries.stream()
-                .collect(Collectors.groupingBy(
-                        TimeSheetEntry::getProjectId,
-                        Collectors.mapping(TimeSheetEntry::getHoursWorked,
-                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
-                ));
+    Map<Long, BigDecimal> projectHours = entries.stream()
+            .filter(e -> e.getProjectId() != null) // ignore missing project entries
+            .collect(Collectors.groupingBy(
+                    TimeSheetEntry::getProjectId,
+                    Collectors.mapping(
+                            e -> e.getHoursWorked() == null ? BigDecimal.ZERO : e.getHoursWorked(), // ✅ handle nulls
+                            Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
+                    )
+            ));
 
-        return projectHours.entrySet().stream().map(e -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("projectId", e.getKey());
-            m.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
-            m.put("totalHoursWorked", formatHours(e.getValue()));
-            return m;
-        }).collect(Collectors.toList());
+    return projectHours.entrySet().stream().map(e -> {
+        Map<String, Object> m = new HashMap<>();
+        m.put("projectId", e.getKey());
+        m.put("projectName", projectMap.getOrDefault(e.getKey(), "Unknown Project"));
+        m.put("totalHoursWorked", formatHours(e.getValue()));
+        return m;
+    }).collect(Collectors.toList());
     }
+
 
     // ✅ Weekly Summary (hours by weekday)
     private Map<String, BigDecimal> calculateWeeklySummary(List<TimeSheetEntry> entries) {
-        Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
-                .collect(Collectors.toMap(
-                        d -> d.name().toLowerCase(),
-                        d -> BigDecimal.ZERO,
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ));
+    // Initialize map with all weekdays
+    Map<String, BigDecimal> weeklySummary = Arrays.stream(DayOfWeek.values())
+            .collect(Collectors.toMap(
+                    d -> d.name().toLowerCase(),
+                    d -> BigDecimal.ZERO,
+                    (a, b) -> a,
+                    LinkedHashMap::new
+            ));
 
-        for (TimeSheetEntry entry : entries) {
-            LocalDate date = entry.getTimeSheet().getWorkDate();
-            BigDecimal hours = entry.getHoursWorked();
-            weeklySummary.merge(date.getDayOfWeek().name().toLowerCase(), hours, BigDecimal::add);
-        }
+    for (TimeSheetEntry entry : entries) {
+        if (entry == null) continue; // skip null entries
+        if (entry.getTimeSheet() == null || entry.getTimeSheet().getWorkDate() == null) continue;
 
-        weeklySummary.replaceAll((k, v) -> formatHours(v));
-        return weeklySummary;
+        LocalDate workDate = entry.getTimeSheet().getWorkDate();
+        BigDecimal hours = entry.getHoursWorked() != null ? entry.getHoursWorked() : BigDecimal.ZERO;
+
+        String dayKey = workDate.getDayOfWeek().name().toLowerCase();
+
+        // ✅ Always provide non-null BigDecimal
+        weeklySummary.merge(dayKey, hours, BigDecimal::add);
     }
+
+    // ✅ Format all totals safely
+    weeklySummary.replaceAll((k, v) -> formatHours(v == null ? BigDecimal.ZERO : v));
+    return weeklySummary;
+    }
+
 
     // ✅ Productivity Details (by day)
     private Map<String, Object> calculateProductivityDetails(List<TimeSheetEntry> entries) {
-        Map<String, List<TimeSheetEntry>> dayWise = entries.stream()
-                .collect(Collectors.groupingBy(e -> e.getTimeSheet().getWorkDate().getDayOfWeek().name().toLowerCase()));
-
-        Map<String, Object> productivity = new LinkedHashMap<>();
-
-        for (DayOfWeek day : DayOfWeek.values()) {
-            List<TimeSheetEntry> dayEntries = dayWise.getOrDefault(day.name().toLowerCase(), new ArrayList<>());
-
-            BigDecimal totalHours = dayEntries.stream()
-                    .map(TimeSheetEntry::getHoursWorked)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            long billableCount = dayEntries.stream().filter(TimeSheetEntry::isBillable).count();
-            long totalCount = dayEntries.size();
-            double billablePercentage = totalCount == 0 ? 0.0 : (billableCount * 100.0 / totalCount);
-
-            long tasksWorked = dayEntries.stream().map(TimeSheetEntry::getTaskId).filter(Objects::nonNull).distinct().count();
-            long projectsWorked = dayEntries.stream().map(TimeSheetEntry::getProjectId).filter(Objects::nonNull).distinct().count();
-
-            double productivityScore = Math.min(100.0, billablePercentage + (tasksWorked * 2) + (projectsWorked * 3));
-
-            productivity.put(day.name().toLowerCase(), Map.of(
-                    "totalHours", formatHours(totalHours),
-                    "billablePercentage", round(billablePercentage, 1),
-                    "tasksWorked", tasksWorked,
-                    "projectsWorked", projectsWorked,
-                    "productivityScore", round(productivityScore, 1)
+    Map<String, List<TimeSheetEntry>> dayWise = entries.stream()
+            .collect(Collectors.groupingBy(
+                    e -> e.getTimeSheet() != null && e.getTimeSheet().getWorkDate() != null
+                            ? e.getTimeSheet().getWorkDate().getDayOfWeek().name().toLowerCase()
+                            : "unknown"
             ));
-        }
 
-        return productivity;
+    Map<String, Object> productivity = new LinkedHashMap<>();
+
+    for (DayOfWeek day : DayOfWeek.values()) {
+        List<TimeSheetEntry> dayEntries = dayWise.getOrDefault(day.name().toLowerCase(), new ArrayList<>());
+
+        // ✅ Handle null hours safely
+        BigDecimal totalHours = dayEntries.stream()
+                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long billableCount = dayEntries.stream().filter(TimeSheetEntry::isBillable).count();
+        long totalCount = dayEntries.size();
+        double billablePercentage = totalCount == 0 ? 0.0 : (billableCount * 100.0 / totalCount);
+
+        long tasksWorked = dayEntries.stream()
+                .map(TimeSheetEntry::getTaskId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+
+        long projectsWorked = dayEntries.stream()
+                .map(TimeSheetEntry::getProjectId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+
+        double productivityScore = Math.min(100.0, billablePercentage + (tasksWorked * 2) + (projectsWorked * 3));
+
+        productivity.put(day.name().toLowerCase(), Map.of(
+                "totalHours", formatHours(totalHours == null ? BigDecimal.ZERO : totalHours),
+                "billablePercentage", round(billablePercentage, 1),
+                "tasksWorked", tasksWorked,
+                "projectsWorked", projectsWorked,
+                "productivityScore", round(productivityScore, 1)
+        ));
     }
+
+    return productivity;
+    }
+
 
     // ✅ Week-based Review Summary (using WeekInfo & WeekTimeSheetReview)
     public Map<String, Object> getWeeklySummary(Long userId, LocalDate startDate, LocalDate endDate) {
