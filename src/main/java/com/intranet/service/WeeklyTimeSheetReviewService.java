@@ -20,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import com.intranet.dto.email.WeeklySubmissionEmailDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
@@ -27,6 +28,8 @@ import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
+import com.intranet.service.email.ManagerNotificationEmailService;
+import com.intranet.util.cache.UserDirectoryService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -38,9 +41,15 @@ public class WeeklyTimeSheetReviewService {
         private final TimeSheetRepo timeSheetRepo;
         private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
         private final TimeSheetReviewRepo timeSheetReviewRepo;
+        private final UserDirectoryService userDirectoryService;
+        private final ManagerNotificationEmailService managerNotificationEmailService;
 
         @Value("${tms.api.base-url}")
         private String tmsBaseUrl;
+
+        @Value("${pms.api.base-url}")
+        private String pmsBaseUrl;
+
         private final RestTemplate restTemplate = new RestTemplate();
 
         private HttpEntity<Void> buildEntityWithAuth() {
@@ -190,12 +199,111 @@ public class WeeklyTimeSheetReviewService {
                 .getMonth()
                 .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
 
-        return String.format(
-                "Timesheets submitted successfully for week %d of %s %d.",
+        // ✅ Step 17: Notify managers via email
+        boolean result = notifyManagersOnWeeklySubmission(userId, commonWeek, totalWorked, timeSheets);
+
+        if (result) {
+            return String.format(
+                "Timesheets submitted successfully for week %d of %s %d. Notification sent to managers.",
                 commonWeek.getWeekNo(),
                 monthName,
                 commonWeek.getYear()
         );
+        } else {
+            return String.format(
+                "Timesheets submitted successfully for week %d of %s %d. Notification not sent to managers.",
+                commonWeek.getWeekNo(),
+                monthName,
+                commonWeek.getYear());
         }
+        
+    }
+        private boolean notifyManagersOnWeeklySubmission(Long userId, WeekInfo commonWeek, BigDecimal totalWorked, List<TimeSheet> timeSheets) {
+            try {
+                // ✅ Step 1: Extract Authorization from current request
+                ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+                if (attrs == null) {
+                    throw new IllegalStateException("No request context available for Authorization header.");
+                }
+                HttpServletRequest request = attrs.getRequest();
+                String authHeader = request.getHeader("Authorization");
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.set("Authorization", authHeader);
+                HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+                // ✅ Step 2: Identify unique project IDs from timesheets
+                List<Long> projectIds = timeSheets.stream()
+                        .flatMap(ts -> ts.getEntries().stream())
+                        .map(e -> e.getProjectId())
+                        .distinct()
+                        .toList();
+
+                if (projectIds.isEmpty()) {
+                    System.out.println("⚠️ No project IDs found in submitted timesheets. Skipping manager notification.");
+                    return false;
+                }
+
+                // ✅ Step 3: Fetch project details from PMS
+                String pmsUrl = String.format("%s/projects", pmsBaseUrl);
+                ResponseEntity<List<Map<String, Object>>> pmsResponse = restTemplate.exchange(
+                        pmsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+                List<Map<String, Object>> allProjects = Optional.ofNullable(pmsResponse.getBody()).orElse(List.of());
+
+                // ✅ Step 4: Filter only relevant projects by ID
+                List<Map<String, Object>> userProjects = allProjects.stream()
+                        .filter(p -> projectIds.contains(((Number) p.get("id")).longValue()))
+                        .toList();
+
+                if (userProjects.isEmpty()) {
+                    System.out.println("⚠️ No matching projects found in PMS for submitted timesheets.");
+                    return false;
+                }
+
+                // ✅ Step 5: Fetch user info from UMS (cached)
+                Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
+                Map<String, Object> userDetails = allUsers.getOrDefault(userId, Map.of(
+                        "name", "Unknown User",
+                        "email", "unknown@example.com"
+                ));
+
+                String userName = (String) userDetails.get("name");
+
+                // ✅ Step 6: Prepare manager notification DTOs
+                List<WeeklySubmissionEmailDTO> managerNotifications = userProjects.stream()
+                        .map(p -> {
+                            Map<String, Object> owner = (Map<String, Object>) p.get("owner");
+                            if (owner == null) return null;
+                            return new WeeklySubmissionEmailDTO(
+                                    ((Number) owner.get("id")).longValue(),
+                                    (String) owner.get("name"),
+                                    (String) owner.get("email"),
+                                    userId,
+                                    userName,
+                                    commonWeek.getStartDate(),
+                                    commonWeek.getEndDate(),
+                                    totalWorked
+                            );
+                        })
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList();
+
+                // ✅ Step 7: Send manager notification emails
+                if (!managerNotifications.isEmpty()) {
+                    managerNotificationEmailService.sendWeeklySubmissionEmails(managerNotifications);
+                    System.out.println("✅ Weekly submission notifications sent to managers.");
+                    return true;
+                } else {
+                    System.out.println("⚠️ No managers found for notification.");
+                    return false;
+                }
+
+            } catch (Exception e) {
+                System.err.println("⚠️ Failed to send manager notification emails: " + e.getMessage());
+                return false;
+            }
+    }
+
 
 }
