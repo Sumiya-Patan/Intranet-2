@@ -158,9 +158,12 @@ public class ManagerSummaryController {
             userCacheEmail.putIfAbsent(userId, "unknown@example.com");
         }
 
-        // Fetch all timesheets
+        // Fetch all timesheets (exclude DRAFT)
         List<TimeSheet> teamSheets = timeSheetRepository
-                .findByUserIdInAndWorkDateBetween(memberIds, startDate, endDate);
+                .findByUserIdInAndWorkDateBetween(memberIds, startDate, endDate)
+                .stream()
+                .filter(ts -> ts.getStatus() != TimeSheet.Status.DRAFT)
+                .collect(Collectors.toList());
 
         List<TimeSheetEntry> allEntries = teamSheets.stream()
                 .flatMap(ts -> ts.getEntries().stream())
