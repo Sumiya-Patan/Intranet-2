@@ -182,7 +182,7 @@ public class ManagerSummaryController {
                 : 0.0;
 
        
-        // 1️⃣ Filter only SUBMITTED or PARTIALLY_APPROVED
+        // ✅ STEP 1: Get all SUBMITTED or PARTIALLY_APPROVED sheets
         List<TimeSheet> relevantSheets = teamSheets.stream()
                 .filter(ts -> {
                 String status = ts.getStatus().name();
@@ -191,42 +191,62 @@ public class ManagerSummaryController {
                 })
                 .collect(Collectors.toList());
 
-        int pendingCount;
-        if (relevantSheets.isEmpty()) {
-        pendingCount = 0;
-        } else {
-        // 2️⃣ Extract all week IDs involved
+        int pendingCount = 0;
+        List<Map<String, Object>> pendingUsers = Collections.emptyList();
+
+        if (!relevantSheets.isEmpty()) {
+
+        // ✅ STEP 2: Extract all weekIds
         Set<Long> weekIds = relevantSheets.stream()
                 .map(ts -> ts.getWeekInfo().getId())
                 .collect(Collectors.toSet());
 
-        // 3️⃣ Fetch all reviews done by this manager for these weeks
-        List<TimeSheetReview> managerReviews = timeSheetReviewRepo
-                .findByManagerIdAndWeekInfo_IdIn(user.getId(), weekIds);
+        // ✅ STEP 3: Get all reviews by this manager for these weeks
+        List<TimeSheetReview> managerReviews =
+                timeSheetReviewRepo.findByManagerIdAndWeekInfo_IdIn(user.getId(), weekIds);
 
-        // 4️⃣ Build lookup of already reviewed user-week pairs (only APPROVED/REJECTED are non-pending)
+        // ✅ STEP 4: Build lookup for reviewed pairs (user-week)
         Set<String> reviewedKeys = managerReviews.stream()
                 .filter(r -> {
-                        String status = r.getStatus().name();
-                        return status != null && (
-                                status.equalsIgnoreCase("APPROVED") ||
-                                status.equalsIgnoreCase("REJECTED"));
+                        String s = r.getStatus().name();
+                        return "APPROVED".equalsIgnoreCase(s) || "REJECTED".equalsIgnoreCase(s);
                 })
                 .map(r -> r.getUserId() + "-" + r.getWeekInfo().getId())
                 .collect(Collectors.toSet());
 
-        // 5️⃣ Identify user-week pairs that are pending for this manager
-        Set<String> pendingKeys = relevantSheets.stream()
+        // ✅ STEP 5: Identify pending (no review or not approved/rejected)
+        Map<Long, Set<Long>> pendingWeeksByUser = relevantSheets.stream()
                 .filter(ts -> {
                         String key = ts.getUserId() + "-" + ts.getWeekInfo().getId();
-                        return !reviewedKeys.contains(key); // not reviewed yet
+                        return !reviewedKeys.contains(key); // Not yet reviewed
                 })
-                .map(ts -> ts.getUserId() + "-" + ts.getWeekInfo().getId())
-                .collect(Collectors.toSet());
+                .collect(Collectors.groupingBy(
+                        TimeSheet::getUserId,
+                        Collectors.mapping(ts -> ts.getWeekInfo().getId(), Collectors.toSet())
+                ));
 
-        // 6️⃣ Final pending count (unique user-week)
-        pendingCount = pendingKeys.size();
+        // ✅ STEP 6: Build per-user summary
+        pendingUsers = pendingWeeksByUser.entrySet().stream()
+                .map(entry -> {
+                        Long userId = entry.getKey();
+                        int weekCount = entry.getValue().size();
+                        Map<String, Object> userMap = new HashMap<>();
+                        userMap.put("userId", userId);
+                        userMap.put("userName", userCacheFullName.getOrDefault(userId, "Unknown"));
+                        userMap.put("pendingWeeks", weekCount);
+                        return userMap;
+                })
+                .collect(Collectors.toList());
+
+        // ✅ STEP 7: Total pending count (sum of all user-week pairs)
+        pendingCount = pendingWeeksByUser.values().stream()
+                .mapToInt(Set::size)
+                .sum();
+
+        pendingUsers.forEach(u -> System.out.println("   → " + u));
                 }
+
+
 
 
         // Missing timesheets
@@ -273,6 +293,7 @@ public class ManagerSummaryController {
         result.put("billableHours", billableHours);
         result.put("billablePercentage", billablePercentage);
         result.put("pending", pendingCount);
+        result.put("pendingUsers", pendingUsers);
         result.put("dateRange", Map.of("startDate", startDate, "endDate", endDate));
         result.put("weeklySummary", weeklySummary);
         result.put("missingTimesheets", missingUsers);
