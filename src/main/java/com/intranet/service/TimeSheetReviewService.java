@@ -25,6 +25,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.intranet.service.email.TimeSheetNotificationService;
+import com.intranet.util.cache.UserDirectoryService;
+import com.intranet.dto.email.TimeSheetSummaryEmailDTO;
+import java.math.BigDecimal;
+
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +40,10 @@ public class TimeSheetReviewService {
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
     private final WeekInfoRepo weekInfoRepo;
     private final RestTemplate restTemplate = new RestTemplate();
+    // ✅ Add this line
+    private final TimeSheetNotificationService timeSheetNotificationService;
+    private final UserDirectoryService userDirectoryService;
+
 
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -52,6 +61,12 @@ public class TimeSheetReviewService {
         }
         return new HttpEntity<>(headers);
     }
+    public static String toTitleCase(String input) {
+    if (input == null || input.isEmpty()) {
+        return input;
+    }
+    return input.substring(0, 1).toUpperCase() + input.substring(1).toLowerCase();
+}
 
     @Transactional
     public String reviewMultipleTimesheets(Long managerId, TimeSheetBulkReviewRequestDTO dto) {
@@ -121,9 +136,17 @@ public class TimeSheetReviewService {
 
         // ✅ Step 3: Update weekly review aggregate
         updateWeeklyTimeSheetReview(userId, firstWeekId);
+         
+        // ✅ Step 4: Send notification emails
+        boolean result = sendReviewNotificationEmails(managerId, dto, sheets);
 
-        return String.format("%d timesheets %s successfully.",
-                sheets.size(), dto.getStatus().toUpperCase());
+        if (result) {
+           return String.format("%d Timesheets %s successfully with notification emails sent.",
+                sheets.size(), toTitleCase(dto.getStatus()));
+        }
+
+        return String.format("%d Timesheets %s successfully but notification emails not sent.",
+                sheets.size(), toTitleCase(dto.getStatus()));
     }
 
     /** Fetch all PMS projects to identify each project's owner (manager) */
@@ -214,5 +237,76 @@ public class TimeSheetReviewService {
         weeklyReview.setStatus(weeklyStatus);
         weeklyReview.setReviewedAt(LocalDateTime.now());
         weeklyReviewRepo.save(weeklyReview);
+    }
+
+    /** ✅ Builds & Sends Email Notifications */
+    private boolean sendReviewNotificationEmails(Long managerId, TimeSheetBulkReviewRequestDTO dto, List<TimeSheet> sheets) {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) throw new IllegalStateException("No request context available for Authorization header");
+
+            HttpServletRequest request = attrs.getRequest();
+            String authHeader = request.getHeader("Authorization");
+
+            Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
+
+            // Manager Name
+            String managerName = allUsers.containsKey(managerId)
+                    ? allUsers.get(managerId).get("name").toString()
+                    : "Manager";
+
+            // ✅ Group timesheets by userId (Long field)
+        Map<Long, List<TimeSheet>> groupedByUser = sheets.stream()
+        .collect(Collectors.groupingBy(TimeSheet::getUserId));
+
+
+            List<TimeSheetSummaryEmailDTO> emails = new ArrayList<>();
+
+            for (Map.Entry<Long, List<TimeSheet>> entry : groupedByUser.entrySet()) {
+                Long userId = entry.getKey();
+                List<TimeSheet> userSheets = entry.getValue();
+                if (userSheets.isEmpty()) continue;
+
+                WeekInfo weekInfo = userSheets.get(0).getWeekInfo();
+
+                Map<String, Object> userInfo = allUsers.containsKey(userId)
+                        ? allUsers.get(userId)
+                        : new HashMap<String, Object>() {{
+                            put("name", "Unknown User");
+                            put("email", "unknown@example.com");
+                        }};
+
+                String userName = userInfo.get("name").toString();
+                String email = userInfo.get("email").toString();
+
+                BigDecimal totalHours = userSheets.stream()
+                        .map(ts -> ts.getHoursWorked() != null ? ts.getHoursWorked() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                TimeSheetSummaryEmailDTO emailDTO = new TimeSheetSummaryEmailDTO();
+                emailDTO.setUserId(userId);
+                emailDTO.setUserName(userName);
+                emailDTO.setEmail(email);
+                emailDTO.setStatus(dto.getStatus().toUpperCase());
+                emailDTO.setStartDate(weekInfo.getStartDate());
+                emailDTO.setEndDate(weekInfo.getEndDate());
+                emailDTO.setTotalHoursLogged(totalHours);
+                emailDTO.setApprovedBy(managerName);
+                emailDTO.setReason(dto.getComments() != null ? dto.getComments() : "No comments provided.");
+
+                emails.add(emailDTO);
+            }
+
+            if (!emails.isEmpty()) {
+                timeSheetNotificationService.sendTimeSheetSummaryEmails(emails);
+                System.out.println("✅ Timesheet review notification emails sent successfully.");
+                return true;
+            }
+
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to send timesheet review emails: " + e.getMessage());
+            return false;
+        }
+        return false;
     }
 }
