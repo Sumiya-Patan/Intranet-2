@@ -36,7 +36,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -477,46 +476,84 @@ public class TimeSheetService {
     @Autowired
     private TimeSheetEntryRepo timeSheetEntryRepository;
     @Transactional
-    public String updateEntries(Long timesheetId,TimeSheetUpdateRequest request) {
+    public String updateEntries(Long timesheetId, TimeSheetUpdateRequest request) {
 
-    TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
-            .orElseThrow(() -> new RuntimeException("TimeSheet not found with ID: " + timesheetId));
+        // 1️⃣ Validate and fetch the timesheet
+        TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+                .orElseThrow(() -> new IllegalArgumentException("TimeSheet not found with ID: " + timesheetId));
 
-    BigDecimal totalHours = BigDecimal.ZERO;
+        BigDecimal totalHours = BigDecimal.ZERO;
 
-    for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
-        TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
-                .orElseThrow(() -> new RuntimeException("Entry not found with ID: " + dto.getId()));
+        // 2️⃣ Validate each entry and apply updates
+        for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
 
-        // partial update — only update fields that are provided
-        if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
-        if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
-        if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
-        if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
-        if (dto.getFromTime() != null) entry.setFromTime(dto.getFromTime());
-        if (dto.getToTime() != null) entry.setToTime(dto.getToTime());
-        if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
-        if (dto.getHoursWorked() != null)
-            entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
-        if (dto.getIsBillable() != null)
-            entry.setBillable(dto.getIsBillable());
+            TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Entry not found with ID: " + dto.getId()));
 
-        timeSheetEntryRepository.save(entry);
-    }
+            // ✅ Perform duplicate & overlap validation before updating
+            if (dto.getFromTime() != null && dto.getToTime() != null) {
 
-    // Recalculate total hours after update
-    for (TimeSheetEntry e : timeSheet.getEntries()) {
-        if (e.getHoursWorked() != null) {
-            totalHours = totalHours.add(e.getHoursWorked());
+                // Duplicate range check — same start & end
+                boolean duplicateExists = timeSheetEntryRepository
+                        .existsByTimeSheet_IdAndFromTimeAndToTimeAndIdNot(
+                                timesheetId,
+                                dto.getFromTime(),
+                                dto.getToTime(),
+                                dto.getId()
+                        );
+
+                if (duplicateExists) {
+                    throw new IllegalArgumentException(
+                            String.format("Duplicate time range (%s to %s) already exists in this timesheet.",
+                                    dto.getFromTime(), dto.getToTime()));
+                }
+
+                // Overlapping range check — partial overlap with another entry
+                boolean overlapExists = timeSheetEntryRepository
+                        .existsOverlappingEntry(
+                                timesheetId,
+                                dto.getFromTime(),
+                                dto.getToTime(),
+                                dto.getId()
+                        );
+
+                if (overlapExists) {
+                    throw new IllegalArgumentException("Overlapping time range already exists in this timesheet.");
+                }
+            }
+
+            // ✅ Partial update — only update fields that are provided
+            if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
+            if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
+            if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
+            if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
+            if (dto.getFromTime() != null) entry.setFromTime(dto.getFromTime());
+            if (dto.getToTime() != null) entry.setToTime(dto.getToTime());
+            if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
+            if (dto.getHoursWorked() != null)
+                entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
+            if (dto.getIsBillable() != null)
+                entry.setBillable(dto.getIsBillable());
+
+            timeSheetEntryRepository.save(entry);
         }
+
+        // 3️⃣ Recalculate total hours after updates
+        for (TimeSheetEntry e : timeSheet.getEntries()) {
+            if (e.getHoursWorked() != null) {
+                totalHours = totalHours.add(e.getHoursWorked());
+            }
+        }
+
+        // 4️⃣ Update timesheet header total
+        timeSheet.setHoursWorked(totalHours);
+        timeSheet.setUpdatedAt(LocalDateTime.now());
+        timeSheetRepository.save(timeSheet);
+
+        // 5️⃣ Return message
+        return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
     }
 
-    timeSheet.setHoursWorked(totalHours);
-    timeSheet.setUpdatedAt(LocalDateTime.now());
-    timeSheetRepository.save(timeSheet);
-
-    return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
-}
 
     
 }

@@ -245,8 +245,14 @@ public class TimeSheetController {
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
     @Operation(summary = "Update multiple entries in a timesheet")
     public ResponseEntity<String> updateEntries(@PathVariable Long timesheetId,@RequestBody TimeSheetUpdateRequest request) {
-        String message = timeSheetService.updateEntries(timesheetId,request);
-        return ResponseEntity.ok(message);
+        try{
+            String message = timeSheetService.updateEntries(timesheetId,request);
+            return ResponseEntity.ok(message);
+        }
+        catch(IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+        
     }
 
 }
