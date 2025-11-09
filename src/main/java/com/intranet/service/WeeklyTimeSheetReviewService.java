@@ -3,10 +3,14 @@ package com.intranet.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -71,153 +75,171 @@ public class WeeklyTimeSheetReviewService {
         }
 
         @Transactional
-        public String submitWeeklyTimeSheets(Long userId, List<Long> timeSheetIds) {
-        if (userId == null || timeSheetIds == null || timeSheetIds.isEmpty()) {
-            throw new IllegalArgumentException("User ID and TimeSheet IDs are required.");
-        }
-
-        // Fetch timesheets
-        List<TimeSheet> timeSheets = timeSheetRepo.findAllById(timeSheetIds);
-        if (timeSheets.isEmpty()) {
-            throw new IllegalArgumentException("No timesheets found for provided IDs.");
-        }
-
-        // Validate same user & week
-        TimeSheet firstTs = timeSheets.get(0);
-        WeekInfo commonWeek = firstTs.getWeekInfo();
-        Long commonUser = firstTs.getUserId();
-
-        boolean valid = timeSheets.stream()
-                .allMatch(ts -> ts.getWeekInfo().getId().equals(commonWeek.getId())
-                        && ts.getUserId().equals(commonUser));
-
-        if (!valid) {
-            throw new IllegalArgumentException("All timesheets must belong to the same user and week.");
-        }
-
-        if (!commonUser.equals(userId)) {
-            throw new IllegalArgumentException("User not authorized to submit these timesheets.");
-        }
-
-        // ✅ Step 1: Calculate total hours worked
-        BigDecimal totalWorked = timeSheets.stream()
-                .map(TimeSheet::getHoursWorked)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // ✅ Step 2: Fetch holidays for the current month
-        HttpEntity<Void> entity = buildEntityWithAuth(); // reuse from your other service
-        String url = String.format("%s/api/holidays/currentMonth", tmsBaseUrl);
-
-        List<Map<String, Object>> holidays = List.of();
-        try {
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-            holidays = response.getBody();
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Unable to fetch holidays for current month.");
-        }
-
-        // ✅ Step 3: Filter holidays that fall within this week and are NOT submitTimesheet=true
-        LocalDate start = commonWeek.getStartDate();
-        LocalDate end = commonWeek.getEndDate();
-
-        long holidayCount = holidays.stream()
-                .filter(h -> {
-                    LocalDate date = LocalDate.parse(h.get("holidayDate").toString());
-                    boolean submitAllowed = Boolean.TRUE.equals(h.get("submitTimesheet"));
-                    return !submitAllowed && (date.isEqual(start) || date.isEqual(end) ||
-                            (date.isAfter(start) && date.isBefore(end)));
-                })
-                .count();
-
-        // ✅ Step 4: Compute required hours (40 - (8 * holidays))
-        BigDecimal requiredHours = BigDecimal.valueOf(40 - (holidayCount * 8));
-
-        // ✅ Step 5: Validation check
-        if (totalWorked.compareTo(requiredHours) < 0) {
-            throw new IllegalArgumentException(String.format(
-                "Weekly total hours %.2f are less than required minimum %.2f hours for  %d holidays.",
-                totalWorked, requiredHours, holidayCount
-            ));
-        }
-
-            // ✅ Step 6: Check existing weekly review
-            Optional<WeeklyTimeSheetReview> existingReviewOpt =
-                    weeklyReviewRepo.findByUserIdAndWeekInfo_Id(userId, commonWeek.getId());
-
-            WeeklyTimeSheetReview review;
-
-            if (existingReviewOpt.isPresent()) {
-                // 🔹 Update existing record
-                review = existingReviewOpt.get();
-
-                // Prevent resubmission if already submitted/approved
-                if (
-                    review.getStatus() == WeeklyTimeSheetReview.Status.APPROVED) {
-                    throw new IllegalStateException(
-                        "Weekly review already " + review.getStatus() + " for this week."
-                    );
-                }
-
-                review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
-                review.setReviewedAt(LocalDateTime.now());
-
-            } else {
-                // 🔹 Create new record
-                review = new WeeklyTimeSheetReview();
-                review.setWeekInfo(commonWeek);
-                review.setUserId(userId);
-                review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
-                review.setSubmittedAt(LocalDateTime.now());
-                review.setReviewedAt(LocalDateTime.now());
-            }
-
-            // ✅ Step 7: Update all timesheets from DRAFT → SUBMITTED
-            timeSheets.forEach(ts -> {
-                ts.setStatus(TimeSheet.Status.SUBMITTED);
-                ts.setUpdatedAt(LocalDateTime.now());
-            });
-            timeSheetRepo.saveAll(timeSheets);
-
-            // ✅ Step 8: Save the weekly review
-            weeklyReviewRepo.save(review);
-
-            // ✅ Step 5: Update existing TimeSheetReview records → PENDING
-            List<TimeSheetReview> existingReviews = timeSheetReviewRepo.findByTimeSheet_IdIn(timeSheetIds);
-
-            if (existingReviews != null && !existingReviews.isEmpty()) {
-                for (TimeSheetReview r : existingReviews) {
-                    r.setStatus(TimeSheetReview.Status.SUBMITTED);
-                    r.setReviewedAt(LocalDateTime.now());
-                }
-
-                timeSheetReviewRepo.saveAll(existingReviews);
-            }
-
-        String monthName = commonWeek.getStartDate()
-                .getMonth()
-                .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
-
-        // ✅ Step 17: Notify managers via email
-        boolean result = notifyManagersOnWeeklySubmission(userId, commonWeek, totalWorked, timeSheets);
-
-        if (result) {
-            return String.format(
-                "Timesheets submitted successfully for week %d of %s %d. Notification sent to managers.",
-                commonWeek.getWeekNo(),
-                monthName,
-                commonWeek.getYear()
-        );
-        } else {
-            return String.format(
-                "Timesheets submitted successfully for week %d of %s %d. Notification not sent to managers.",
-                commonWeek.getWeekNo(),
-                monthName,
-                commonWeek.getYear());
-        }
-        
+public String submitWeeklyTimeSheets(Long userId, List<Long> timeSheetIds) {
+    if (userId == null || timeSheetIds == null || timeSheetIds.isEmpty()) {
+        throw new IllegalArgumentException("User ID and TimeSheet IDs are required.");
     }
+
+    // ✅ Step 1: Fetch and validate timesheets
+    List<TimeSheet> timeSheets = timeSheetRepo.findAllById(timeSheetIds);
+    if (timeSheets.isEmpty()) {
+        throw new IllegalArgumentException("No timesheets found for provided IDs.");
+    }
+
+    TimeSheet firstTs = timeSheets.get(0);
+    WeekInfo commonWeek = firstTs.getWeekInfo();
+    Long commonUser = firstTs.getUserId();
+
+    boolean valid = timeSheets.stream()
+            .allMatch(ts -> ts.getWeekInfo().getId().equals(commonWeek.getId())
+                    && ts.getUserId().equals(commonUser));
+
+    if (!valid) {
+        throw new IllegalArgumentException("All timesheets must belong to the same user and week.");
+    }
+
+    if (!commonUser.equals(userId)) {
+        throw new IllegalArgumentException("User not authorized to submit these timesheets.");
+    }
+
+    // ✅ Step 2: Fetch holidays for the current month
+    HttpEntity<Void> entity = buildEntityWithAuth();
+    String url = String.format("%s/api/holidays/currentMonth", tmsBaseUrl);
+
+    List<Map<String, Object>> holidays = List.of();
+    try {
+        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+        holidays = Optional.ofNullable(response.getBody()).orElse(List.of());
+    } catch (Exception e) {
+        System.err.println("⚠️ Unable to fetch holidays for current month: " + e.getMessage());
+    }
+
+    Map<LocalDate, Map<String, Object>> holidayMap = holidays.stream()
+            .filter(h -> h.get("holidayDate") != null)
+            .collect(Collectors.toMap(
+                    h -> LocalDate.parse(h.get("holidayDate").toString()),
+                    h -> h,
+                    (a, b) -> a
+            ));
+
+    // ✅ Step 3: Identify all dates in the week range
+    LocalDate start = commonWeek.getStartDate();
+    LocalDate end = commonWeek.getEndDate();
+    List<LocalDate> weekDates = start.datesUntil(end.plusDays(1)).toList();
+
+    // ✅ Step 4: Determine required hours and required dates based on holidays and weekends
+    Map<LocalDate, Integer> requiredHoursPerDate = new LinkedHashMap<>();
+
+    for (LocalDate date : weekDates) {
+        int defaultHours;
+        boolean isWeekend = date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY ||
+                            date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY;
+        defaultHours = isWeekend ? 4 : 8;
+
+        Map<String, Object> holiday = holidayMap.get(date);
+        boolean submitAllowed = false;
+
+        if (holiday != null && holiday.containsKey("submitTimesheet")) {
+            submitAllowed = Boolean.TRUE.equals(holiday.get("submitTimesheet"));
+        }
+
+        if (holiday == null) {
+            // Normal working/ weekend day, add default hours
+            requiredHoursPerDate.put(date, defaultHours);
+        } else if (submitAllowed) {
+            // Holiday but allowed to submit
+            requiredHoursPerDate.put(date, defaultHours);
+        } else {
+            // Holiday and NOT allowed to submit — skip that date entirely
+        }
+    }
+
+    // ✅ Step 5: Validate if user submitted all required timesheets
+    Set<LocalDate> submittedDates = timeSheets.stream()
+            .map(TimeSheet::getWorkDate)
+            .collect(Collectors.toSet());
+
+    Set<LocalDate> requiredDates = requiredHoursPerDate.keySet();
+
+    Set<LocalDate> missingDates = new HashSet<>(requiredDates);
+    missingDates.removeAll(submittedDates);
+
+    if (!missingDates.isEmpty()) {
+        throw new IllegalArgumentException(
+                "Missing timesheets for required dates: " +
+                missingDates.stream().sorted().map(LocalDate::toString).collect(Collectors.joining(", "))
+        );
+    }
+
+    // ✅ Step 6: Compute total required hours
+    int totalRequiredHours = requiredHoursPerDate.values().stream()
+            .mapToInt(Integer::intValue)
+            .sum();
+    BigDecimal requiredHours = BigDecimal.valueOf(totalRequiredHours);
+
+    // ✅ Step 7: Calculate total worked hours
+    BigDecimal totalWorked = timeSheets.stream()
+            .map(TimeSheet::getHoursWorked)
+            .filter(Objects::nonNull)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // ✅ Step 8: Validation check
+    if (totalWorked.compareTo(requiredHours) < 0) {
+        throw new IllegalArgumentException(String.format(
+            "Weekly total hours %.2f are less than required minimum %.2f hours for week %d.",
+            totalWorked, requiredHours, commonWeek.getWeekNo()
+        ));
+    }
+
+    // ✅ Step 9: Update or create WeeklyTimeSheetReview
+    WeeklyTimeSheetReview review = weeklyReviewRepo
+            .findByUserIdAndWeekInfo_Id(userId, commonWeek.getId())
+            .orElseGet(() -> {
+                WeeklyTimeSheetReview r = new WeeklyTimeSheetReview();
+                r.setUserId(userId);
+                r.setWeekInfo(commonWeek);
+                r.setSubmittedAt(LocalDateTime.now());
+                return r;
+            });
+
+    review.setStatus(WeeklyTimeSheetReview.Status.SUBMITTED);
+    review.setReviewedAt(LocalDateTime.now());
+    weeklyReviewRepo.save(review);
+
+    // ✅ Step 10: Update all timesheets to SUBMITTED
+    timeSheets.forEach(ts -> {
+        ts.setStatus(TimeSheet.Status.SUBMITTED);
+        ts.setUpdatedAt(LocalDateTime.now());
+    });
+    timeSheetRepo.saveAll(timeSheets);
+
+    // ✅ Step 11: Update TimeSheetReview records → SUBMITTED
+    List<TimeSheetReview> existingReviews = timeSheetReviewRepo.findByTimeSheet_IdIn(timeSheetIds);
+    if (existingReviews != null && !existingReviews.isEmpty()) {
+        existingReviews.forEach(r -> {
+            r.setStatus(TimeSheetReview.Status.SUBMITTED);
+            r.setReviewedAt(LocalDateTime.now());
+        });
+        timeSheetReviewRepo.saveAll(existingReviews);
+    }
+
+    // ✅ Step 12: Notify managers via email
+    boolean result = notifyManagersOnWeeklySubmission(userId, commonWeek, totalWorked, timeSheets);
+
+    String monthName = commonWeek.getStartDate()
+            .getMonth()
+            .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+
+    return String.format(
+            "Timesheets submitted successfully for week %d of %s %d. %s",
+            commonWeek.getWeekNo(),
+            monthName,
+            commonWeek.getYear(),
+            result ? "Notification sent to managers." : "Notification not sent to managers."
+    );
+}
+
         private boolean notifyManagersOnWeeklySubmission(Long userId, WeekInfo commonWeek, BigDecimal totalWorked, List<TimeSheet> timeSheets) {
             try {
                 // ✅ Step 1: Extract Authorization from current request
