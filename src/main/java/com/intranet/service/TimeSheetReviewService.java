@@ -107,6 +107,60 @@ public class TimeSheetReviewService {
         WeekInfo weekInfo = sheets.get(0).getWeekInfo();
         Long userId = dto.getUserId();
 
+        Optional<WeeklyTimeSheetReview> existingWeeklyReviewOpt =
+        weeklyReviewRepo.findByUserIdAndWeekInfo_Id(userId, weekInfo.getId());
+
+        if (existingWeeklyReviewOpt.isPresent()) {
+            WeeklyTimeSheetReview existingReview = existingWeeklyReviewOpt.get();
+            WeeklyTimeSheetReview.Status weeklyStatus = existingReview.getStatus();
+
+            // 🚫 Case 1: Already fully reviewed (approved/rejected)
+            if (weeklyStatus == WeeklyTimeSheetReview.Status.APPROVED ||
+                weeklyStatus == WeeklyTimeSheetReview.Status.REJECTED) {
+                throw new IllegalArgumentException(String.format(
+                    "Cannot review timesheets for user ID %d in week %d (%s - %s) because it is already %s.",
+                    userId,
+                    weekInfo.getId(),
+                    weekInfo.getStartDate(),
+                    weekInfo.getEndDate(),
+                    weeklyStatus.name()
+                ));
+            }
+
+            // ⚠️ Case 2: Partially approved — ensure this manager hasn’t reviewed everything already
+            if (weeklyStatus == WeeklyTimeSheetReview.Status.PARTIALLY_APPROVED) {
+
+                // Fetch all timesheets for this user & week
+                List<TimeSheet> userWeekSheets = timeSheetRepo.findByUserIdAndWeekInfo_Id(userId, weekInfo.getId());
+
+                // Fetch all reviews done by this manager in this week
+                List<TimeSheetReview> managerReviews =
+                        reviewRepo.findByWeekInfo_IdAndManagerId(weekInfo.getId(), managerId);
+
+                // Collect the IDs the manager has reviewed
+                Set<Long> reviewedSheetIds = managerReviews.stream()
+                        .map(r -> r.getTimeSheet().getId())
+                        .collect(Collectors.toSet());
+
+                // Check if this manager has already reviewed all sheets
+                boolean managerReviewedAll = userWeekSheets.stream()
+                        .map(TimeSheet::getId)
+                        .allMatch(reviewedSheetIds::contains);
+
+                if (managerReviewedAll) {
+                    throw new IllegalArgumentException(String.format(
+                        "Manager ID %d has already reviewed all timesheets for user ID %d in week %d (%s - %s).",
+                        managerId,
+                        userId,
+                        weekInfo.getId(),
+                        weekInfo.getStartDate(),
+                        weekInfo.getEndDate()
+                    ));
+                }
+            }
+    }
+
+
         if (weekInfo.getEndDate().isBefore(LocalDate.now().minusDays(30))) {
             throw new IllegalArgumentException("Cannot review timesheets older than 30 days.");
         }
@@ -217,11 +271,14 @@ public class TimeSheetReviewService {
                 .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.REJECTED);
         boolean allApproved = weekTimeSheets.stream()
                 .allMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED);
+        boolean anyApproved = weekTimeSheets.stream()
+                .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
     
 
         WeeklyTimeSheetReview.Status weeklyStatus;
         if (anyRejected) weeklyStatus = WeeklyTimeSheetReview.Status.REJECTED;
         else if (allApproved) weeklyStatus = WeeklyTimeSheetReview.Status.APPROVED;
+        else if (anyApproved) weeklyStatus = WeeklyTimeSheetReview.Status.PARTIALLY_APPROVED;
         else weeklyStatus = WeeklyTimeSheetReview.Status.SUBMITTED;
 
         WeeklyTimeSheetReview weeklyReview = weeklyReviewRepo

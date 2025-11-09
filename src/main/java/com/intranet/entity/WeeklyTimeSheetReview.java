@@ -35,7 +35,7 @@ public class WeeklyTimeSheetReview {
     private Status status;
 
     public enum Status {
-        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED, SUBMITTED
+        DRAFT, PENDING, APPROVED, PARTIALLY_REJECTED, REJECTED, SUBMITTED, PARTIALLY_APPROVED
     }
 
     @Column

@@ -28,4 +28,6 @@ public interface TimeSheetReviewRepo  extends JpaRepository<TimeSheetReview, Lon
 
     List<TimeSheetReview> findByManagerIdAndWeekInfo_IdIn(Long id, Set<Long> submittedWeekIds);
 
+    List<TimeSheetReview> findByWeekInfo_IdAndManagerId(Long id, Long managerId);
+
 }
