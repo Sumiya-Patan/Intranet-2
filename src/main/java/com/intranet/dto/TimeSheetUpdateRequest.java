@@ -19,7 +19,6 @@ public class TimeSheetUpdateRequest {
         private String workLocation;
         private LocalDateTime fromTime;
         private LocalDateTime toTime;
-        private Double hoursWorked;
         private String otherDescription;
     }
 }
