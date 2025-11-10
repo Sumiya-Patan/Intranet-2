@@ -308,7 +308,7 @@ public class TimeSheetService {
 
             String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
             String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
-            boolean isBillable = task.get("isBillable") != null && (Boolean) task.get("isBillable");
+            boolean isBillable = task.get("billable") != null && (Boolean) task.get("billable");
 
             TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime, isBillable);
 
