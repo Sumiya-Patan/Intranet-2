@@ -21,6 +21,5 @@ public class TimeSheetUpdateRequest {
         private LocalDateTime toTime;
         private Double hoursWorked;
         private String otherDescription;
-        private Boolean isBillable;
     }
 }

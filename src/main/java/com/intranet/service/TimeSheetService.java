@@ -532,9 +532,6 @@ public class TimeSheetService {
             if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
             if (dto.getHoursWorked() != null)
                 entry.setHoursWorked(BigDecimal.valueOf(dto.getHoursWorked()));
-            if (dto.getIsBillable() != null)
-                entry.setBillable(dto.getIsBillable());
-
             timeSheetEntryRepository.save(entry);
         }
 
