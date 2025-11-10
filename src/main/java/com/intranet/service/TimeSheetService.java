@@ -477,86 +477,91 @@ public class TimeSheetService {
     private TimeSheetEntryRepo timeSheetEntryRepository;
 
     @Transactional
-    public String updateEntries(Long timesheetId, TimeSheetUpdateRequest request) {
+public String updateEntries(Long timesheetId, TimeSheetUpdateRequest request) {
 
-        // 1️⃣ Fetch and validate timesheet
-        TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
-                .orElseThrow(() -> new IllegalArgumentException("TimeSheet not found with ID: " + timesheetId));
+    // 1️⃣ Fetch and validate timesheet
+    TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+            .orElseThrow(() -> new IllegalArgumentException("TimeSheet not found with ID: " + timesheetId));
 
-        BigDecimal totalHours = BigDecimal.ZERO;
+    // 2️⃣ Fetch all entries of this timesheet (sorted chronologically)
+    List<TimeSheetEntry> allEntries = timeSheetEntryRepository
+            .findByTimeSheet_IdOrderByFromTimeAsc(timesheetId);
 
-        // 2️⃣ Process each entry update
-        for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
+    BigDecimal totalHours = BigDecimal.ZERO;
 
-            TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Entry not found with ID: " + dto.getId()));
+    // 3️⃣ Process each entry update request
+    for (TimeSheetUpdateRequest.EntryUpdateDto dto : request.getEntries()) {
 
-            // ✅ Duplicate & overlap validation (same as before)
-            if (dto.getFromTime() != null && dto.getToTime() != null) {
-                boolean duplicateExists = timeSheetEntryRepository
-                        .existsByTimeSheet_IdAndFromTimeAndToTimeAndIdNot(
-                                timesheetId,
-                                dto.getFromTime(),
-                                dto.getToTime(),
-                                dto.getId()
-                        );
-                if (duplicateExists) {
-                    throw new IllegalArgumentException(
-                            String.format("Duplicate time range (%s to %s) already exists in this timesheet.",
-                                    dto.getFromTime(), dto.getToTime()));
-                }
+        TimeSheetEntry entry = timeSheetEntryRepository.findById(dto.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Entry not found with ID: " + dto.getId()));
 
-                boolean overlapExists = timeSheetEntryRepository
-                        .existsOverlappingEntry(
-                                timesheetId,
-                                dto.getFromTime(),
-                                dto.getToTime(),
-                                dto.getId()
-                        );
-                if (overlapExists) {
-                    throw new IllegalArgumentException("Overlapping time range already exists in this timesheet.");
-                }
-            }
+        LocalDateTime newFrom = dto.getFromTime() != null ? dto.getFromTime() : entry.getFromTime();
+        LocalDateTime newTo = dto.getToTime() != null ? dto.getToTime() : entry.getToTime();
 
-            // ✅ Partial update of fields
-            if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
-            if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
-            if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
-            if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
-            if (dto.getFromTime() != null) entry.setFromTime(dto.getFromTime());
-            if (dto.getToTime() != null) entry.setToTime(dto.getToTime());
-            if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
-
-            // ✅ Always calculate hoursWorked if from/to times are set
-            if (entry.getFromTime() != null && entry.getToTime() != null) {
-                long minutes = java.time.Duration.between(entry.getFromTime(), entry.getToTime()).toMinutes();
-                BigDecimal calculatedHours = BigDecimal.valueOf(minutes / 60.0);
-                entry.setHoursWorked(calculatedHours);
-            }
-            // else, if user explicitly provided hoursWorked without from/to (rare case)
-            else {
-                entry.setHoursWorked(BigDecimal.valueOf(0));
-            }
-
-            // Save the updated entry
-            timeSheetEntryRepository.save(entry);
+        // Basic time sanity check
+        if (newFrom == null || newTo == null || !newTo.isAfter(newFrom)) {
+            throw new IllegalArgumentException("Invalid time range: 'toTime' must be after 'fromTime'.");
         }
 
-        // 3️⃣ Recalculate total hours for timesheet
-        for (TimeSheetEntry e : timeSheet.getEntries()) {
-            if (e.getHoursWorked() != null) {
-                totalHours = totalHours.add(e.getHoursWorked());
+        // 4️⃣ Identify previous and next entries (excluding current)
+        TimeSheetEntry previous = null;
+        TimeSheetEntry next = null;
+
+        for (int i = 0; i < allEntries.size(); i++) {
+            TimeSheetEntry current = allEntries.get(i);
+            if (current.getId().equals(entry.getId())) {
+                if (i > 0) previous = allEntries.get(i - 1);
+                if (i < allEntries.size() - 1) next = allEntries.get(i + 1);
+                break;
             }
         }
 
-        // 4️⃣ Update the timesheet summary
-        timeSheet.setHoursWorked(totalHours);
-        timeSheet.setUpdatedAt(LocalDateTime.now());
-        timeSheetRepository.save(timeSheet);
+        // 5️⃣ Validate “no interference” rule
+        if (previous != null && newFrom.isBefore(previous.getToTime())) {
+            throw new IllegalArgumentException("New start time overlaps or cuts into previous entry ending.");
+        }
 
-        // 5️⃣ Return success message
-        return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
+        if (next != null && newTo.isAfter(next.getFromTime())) {
+            throw new IllegalArgumentException("New end time overlaps or cuts into next entry starting.");
+        }
+
+        // ✅ 6️⃣ Apply updates
+        if (dto.getProjectId() != null) entry.setProjectId(dto.getProjectId());
+        if (dto.getTaskId() != null) entry.setTaskId(dto.getTaskId());
+        if (dto.getDescription() != null) entry.setDescription(dto.getDescription());
+        if (dto.getWorkLocation() != null) entry.setWorkLocation(dto.getWorkLocation());
+        entry.setFromTime(newFrom);
+        entry.setToTime(newTo);
+        if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
+
+        // ✅ 7️⃣ Calculate hours automatically
+        long minutes = java.time.Duration.between(newFrom, newTo).toMinutes();
+        entry.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
+
+        timeSheetEntryRepository.save(entry);
     }
+
+    // 8️⃣ Recalculate total hours
+    for (TimeSheetEntry e : timeSheet.getEntries()) {
+        if (e.getHoursWorked() != null) {
+            totalHours = totalHours.add(e.getHoursWorked());
+        }
+    }
+    
+    // 9️⃣ Validate minimum total hours (must be >= 8)
+    if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+        throw new IllegalArgumentException("Total hours in the timesheet must be at least 8. Current total: "
+                + totalHours.stripTrailingZeros().toPlainString() + " hours.");
+    }
+    
+    // 9️⃣ Update the timesheet summary
+    timeSheet.setHoursWorked(totalHours);
+    timeSheet.setUpdatedAt(LocalDateTime.now());
+    timeSheetRepository.save(timeSheet);
+
+    return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
+}
+
 
 
     

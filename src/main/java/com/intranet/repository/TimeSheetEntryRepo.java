@@ -40,4 +40,6 @@ List<TimeSheetEntry> findByTimeSheetId(Long timeSheetId);
                                    @Param("fromTime") LocalDateTime fromTime,
                                    @Param("toTime") LocalDateTime toTime,
                                    @Param("excludeId") Long excludeId);
+                                   
+    List<TimeSheetEntry> findByTimeSheet_IdOrderByFromTimeAsc(Long timesheetId);
 }
