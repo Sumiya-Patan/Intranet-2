@@ -159,55 +159,92 @@ public class TimeSheetService {
     }
 
 
+    @Transactional
     public String addEntriesToTimeSheet(AddEntryDTO addEntryDTO) {
         Long timesheetId = addEntryDTO.getTimeSheetId();
-
         if (timesheetId == null) {
-            return "timeSheetId is required in the request body";
+            throw new IllegalArgumentException("timeSheetId is required in the request body");
         }
 
-        Optional<TimeSheet> optionalTimeSheet = timeSheetRepository.findById(timesheetId);
-
-        if (optionalTimeSheet.isEmpty()) {
-            return "No timesheet found with id: " + timesheetId;
-        }
-
-        TimeSheet timeSheet = optionalTimeSheet.get();
+        TimeSheet timeSheet = timeSheetRepository.findById(timesheetId)
+                .orElseThrow(() -> new IllegalArgumentException("No timesheet found with id: " + timesheetId));
 
         if (addEntryDTO.getEntries() == null || addEntryDTO.getEntries().isEmpty()) {
-            return "No entries provided to add";
+            throw new IllegalArgumentException("No entries provided to add");
         }
 
-        // Add each entry
-        for (TimeSheetEntryCreateDTO entryDTO : addEntryDTO.getEntries()) {
+        // 1️⃣ Fetch all existing entries sorted by time
+        List<TimeSheetEntry> existingEntries = timeSheetEntryRepository
+                .findByTimeSheet_IdOrderByFromTimeAsc(timesheetId);
+
+        List<TimeSheetEntry> newEntries = new ArrayList<>();
+
+        // 2️⃣ Validate and prepare new entries
+        for (TimeSheetEntryCreateDTO dto : addEntryDTO.getEntries()) {
+
+            // Validate basic fields
+            if (dto.getFromTime() == null || dto.getToTime() == null || !dto.getToTime().isAfter(dto.getFromTime())) {
+                throw new IllegalArgumentException(String.format(
+                        "Invalid time range (%s - %s). 'toTime' must be after 'fromTime'.",
+                        dto.getFromTime(), dto.getToTime()));
+            }
+
+            // Check against existing entries for overlap/interference
+            for (TimeSheetEntry existing : existingEntries) {
+                if (dto.getFromTime().isBefore(existing.getToTime()) && dto.getToTime().isAfter(existing.getFromTime())) {
+                    throw new IllegalArgumentException("New entry overlaps with existing entry.");
+                }
+            }
+
+            // Check against other new entries in the same request
+            for (TimeSheetEntry other : newEntries) {
+                if (dto.getFromTime().isBefore(other.getToTime()) && dto.getToTime().isAfter(other.getFromTime())) {
+                    throw new IllegalArgumentException("New entry overlaps with existing entry.");
+                }
+            }
+
+            // ✅ Passed all validations — prepare new entry
             TimeSheetEntry entry = new TimeSheetEntry();
             entry.setTimeSheet(timeSheet);
-            entry.setProjectId(entryDTO.getProjectId());
-            entry.setTaskId(entryDTO.getTaskId());
-            entry.setDescription(entryDTO.getDescription());
-            entry.setFromTime(entryDTO.getFromTime());
-            entry.setToTime(entryDTO.getToTime());
-            entry.setWorkLocation(entryDTO.getWorkLocation());
-            entry.setHoursWorked(entryDTO.getHoursWorked());
-            entry.setOtherDescription(entryDTO.getOtherDescription());
-            entry.setBillable(entryDTO.isBillable());
+            entry.setProjectId(dto.getProjectId());
+            entry.setTaskId(dto.getTaskId());
+            entry.setDescription(dto.getDescription());
+            entry.setWorkLocation(dto.getWorkLocation());
+            entry.setFromTime(dto.getFromTime());
+            entry.setToTime(dto.getToTime());
+            entry.setOtherDescription(dto.getOtherDescription());
+            entry.setBillable(dto.isBillable());
 
-            timeSheet.getEntries().add(entry);
+            // Auto-calculate hours
+            long minutes = java.time.Duration.between(dto.getFromTime(), dto.getToTime()).toMinutes();
+            BigDecimal hours = BigDecimal.valueOf(minutes / 60.0);
+            entry.setHoursWorked(hours);
+
+            newEntries.add(entry);
         }
 
-        // Recalculate total hours
-        timeSheet.setHoursWorked(
-            timeSheet.getEntries().stream()
-                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : java.math.BigDecimal.ZERO)
-                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add)
-        );
+        // 3️⃣ Add new entries to the timesheet
+        timeSheet.getEntries().addAll(newEntries);
 
+        // 4️⃣ Recalculate total hours (existing + new)
+        BigDecimal totalHours = timeSheet.getEntries().stream()
+                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 5️⃣ Validate total hours (must be >= 8)
+        if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+            throw new IllegalArgumentException("Total hours in timesheet must be at least 8. Current total: "
+                    + totalHours.stripTrailingZeros().toPlainString());
+        }
+
+        // 6️⃣ Save everything
+        timeSheet.setHoursWorked(totalHours);
         timeSheet.setUpdatedAt(LocalDateTime.now());
-
         timeSheetRepository.save(timeSheet);
 
-        return "Entries added successfully. Total hours now: " + timeSheet.getHoursWorked();
+        return "Entries added successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
     }
+
 
     @Transactional
     public String deleteEntries(Long timesheetId, DeleteTimeSheetEntriesRequest request) {
