@@ -25,6 +25,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -169,7 +170,11 @@ public class WeeklySummaryService {
             boolean anyApproved = actionStatusList.stream().anyMatch(a -> "APPROVED".equalsIgnoreCase(a.getStatus()));
             // boolean allPending = actionStatusList.stream().allMatch(a -> "PENDING".equalsIgnoreCase(a.getStatus()));
 
-                List<TimeSheetEntrySummaryDTO> entries = ts.getEntries().stream().map(e -> {
+                List<TimeSheetEntrySummaryDTO> entries = ts.getEntries().stream()
+                .sorted(Comparator.comparing(
+                    e -> e.getFromTime() != null ? e.getFromTime() : LocalDateTime.MIN
+                )) // ✅ Sort by start time safely, even if null
+                .map(e -> {
                 TimeSheetEntrySummaryDTO dto = new TimeSheetEntrySummaryDTO();
                 dto.setTimesheetEntryid(e.getId());
                 dto.setProjectId(e.getProjectId());
