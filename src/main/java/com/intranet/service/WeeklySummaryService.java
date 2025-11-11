@@ -194,6 +194,13 @@ public class WeeklySummaryService {
             tsDTO.setWorkDate(ts.getWorkDate());
             tsDTO.setHoursWorked(ts.getHoursWorked());
             tsDTO.setEntries(entries);
+                        // ✅ Mark if this timesheet is an auto-generated 8-hour default holiday
+            boolean isDefaultHolidayTimesheet =
+                (ts.getEntries() == null || ts.getEntries().isEmpty()) &&
+                ts.getHoursWorked() != null &&
+                ts.getHoursWorked().compareTo(BigDecimal.valueOf(8)) == 0;
+
+            tsDTO.setDefaultHolidayTimesheet(isDefaultHolidayTimesheet);
 
             if (actionStatusList.isEmpty()) {
                 overallStatus = "SUBMITTED";

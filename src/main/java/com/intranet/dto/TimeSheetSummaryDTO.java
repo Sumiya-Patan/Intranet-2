@@ -13,6 +13,7 @@ public class TimeSheetSummaryDTO {
     private BigDecimal hoursWorked;
     private String status;
     private Boolean isHolidayTimesheet;
+    private Boolean defaultHolidayTimesheet;
     private List<TimeSheetEntrySummaryDTO> entries;
     private List<ActionStatusDTO> actionStatus;
 }
