@@ -294,7 +294,7 @@ public class HolidayExcludeUsersService {
         return "Holiday Exclude entry updated successfully.";
     }
 
-    public List<LocalDate> getUserHolidayDates(Long userId, int month) {
+    public List<LocalDate> getUserHolidayDates(int month) {
     HttpEntity<Void> entity = buildEntityWithAuth();
 
     // Step 1️⃣: Fetch holidays from LMS
