@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -293,6 +294,40 @@ public class HolidayExcludeUsersService {
         return "Holiday Exclude entry updated successfully.";
     }
 
+    public List<LocalDate> getUserHolidayDates(Long userId, int month) {
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // Step 1️⃣: Fetch holidays from LMS
+    String url = String.format("%s/api/holidays/month/%d", lmsBaseUrl, month);
+    ResponseEntity<List<HolidayDTO>> response;
+    try {
+        response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<List<HolidayDTO>>() {}
+        );
+    } catch (Exception e) {
+        throw new IllegalStateException("Failed to fetch holidays from LMS for month: " + month, e);
+    }
+
+    List<HolidayDTO> lmsHolidays = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+    // Step 3️⃣: Generate weekend holidays
+    List<HolidayDTO> weekendHolidays = generateWeekendHolidays(month);
+    // Step 4️⃣: Merge LMS + weekend holidays
+    List<HolidayDTO> allHolidays = new ArrayList<>();
+    allHolidays.addAll(lmsHolidays);
+    allHolidays.addAll(weekendHolidays);
+
+    
+    // Step 6️⃣: Extract only unique dates
+    return allHolidays.stream()
+            .map(HolidayDTO::getHolidayDate)
+            .filter(Objects::nonNull)
+            .distinct() // ensures unique dates
+            .sorted()
+            .collect(Collectors.toList());
+    }
 
 }
 
