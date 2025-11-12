@@ -32,6 +32,14 @@ public class TimesheetFinanceReportController {
         employeeBreakdown.add(createEmployee("Sarah Johnson", 21, 148, 18, 12, 178, "91%"));
         employeeBreakdown.add(createEmployee("Mike Chen", 22, 152, 24, 4, 180, "94%"));
         employeeBreakdown.add(createEmployee("Emily Davis", 21, 145, 18, 13, 176, "93%"));
+        employeeBreakdown.add(createEmployee("John Smith", 22, 160, 20, 8, 188, "95%"));
+        employeeBreakdown.add(createEmployee("Sarah Johnson", 21, 148, 18, 12, 178, "91%"));
+        employeeBreakdown.add(createEmployee("Mike Chen", 22, 152, 24, 4, 180, "94%"));
+        employeeBreakdown.add(createEmployee("Emily Davis", 21, 145, 18, 13, 176, "93%"));
+        employeeBreakdown.add(createEmployee("John Smith", 22, 160, 20, 8, 188, "95%"));
+        employeeBreakdown.add(createEmployee("Sarah Johnson", 21, 148, 18, 12, 178, "91%"));
+        employeeBreakdown.add(createEmployee("Mike Chen", 22, 152, 24, 4, 180, "94%"));
+        employeeBreakdown.add(createEmployee("Emily Davis", 21, 145, 18, 13, 176, "93%"));
         response.put("employeeBreakdown", employeeBreakdown);
 
         // Employee Productivity
@@ -40,10 +48,34 @@ public class TimesheetFinanceReportController {
         employeeProductivity.add(createProductivity("EMP002", "Sarah Johnson", 21, 178, "91%"));
         employeeProductivity.add(createProductivity("EMP003", "Mike Chen", 22, 180, "94%"));
         employeeProductivity.add(createProductivity("EMP004", "Emily Davis", 21, 176, "93%"));
+        employeeProductivity.add(createProductivity("EMP001", "John Smith", 22, 188, "95%"));
+        employeeProductivity.add(createProductivity("EMP002", "Sarah Johnson", 21, 178, "91%"));
+        employeeProductivity.add(createProductivity("EMP003", "Mike Chen", 22, 180, "94%"));
+        employeeProductivity.add(createProductivity("EMP004", "Emily Davis", 21, 176, "93%"));
+        employeeProductivity.add(createProductivity("EMP001", "John Smith", 22, 188, "95%"));
+        employeeProductivity.add(createProductivity("EMP002", "Sarah Johnson", 21, 178, "91%"));
+        employeeProductivity.add(createProductivity("EMP003", "Mike Chen", 22, 180, "94%"));
+        employeeProductivity.add(createProductivity("EMP004", "Emily Davis", 21, 176, "93%"));
+        employeeProductivity.add(createProductivity("EMP001", "John Smith", 22, 188, "95%"));
+        employeeProductivity.add(createProductivity("EMP002", "Sarah Johnson", 21, 178, "91%"));
+        employeeProductivity.add(createProductivity("EMP003", "Mike Chen", 22, 180, "94%"));
+        employeeProductivity.add(createProductivity("EMP004", "Emily Davis", 21, 176, "93%"));
         response.put("employeeProductivity", employeeProductivity);
 
         // Project Breakdown
         List<Map<String, Object>> projectBreakdown = new ArrayList<>();
+        projectBreakdown.add(createProject("Project Alpha", 3, 480));
+        projectBreakdown.add(createProject("Project Beta", 2, 320));
+        projectBreakdown.add(createProject("Project Gamma", 3, 240));
+        projectBreakdown.add(createProject("Internal Training", 2, 0));
+        projectBreakdown.add(createProject("Project Alpha", 3, 480));
+        projectBreakdown.add(createProject("Project Beta", 2, 320));
+        projectBreakdown.add(createProject("Project Gamma", 3, 240));
+        projectBreakdown.add(createProject("Internal Training", 2, 0));
+        projectBreakdown.add(createProject("Project Alpha", 3, 480));
+        projectBreakdown.add(createProject("Project Beta", 2, 320));
+        projectBreakdown.add(createProject("Project Gamma", 3, 240));
+        projectBreakdown.add(createProject("Internal Training", 2, 0));
         projectBreakdown.add(createProject("Project Alpha", 3, 480));
         projectBreakdown.add(createProject("Project Beta", 2, 320));
         projectBreakdown.add(createProject("Project Gamma", 3, 240));
