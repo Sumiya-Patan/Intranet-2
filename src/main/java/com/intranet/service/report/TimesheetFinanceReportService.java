@@ -3,26 +3,67 @@ package com.intranet.service.report;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.service.HolidayExcludeUsersService;
+import com.intranet.util.cache.UserDirectoryService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class TimesheetFinanceReportService {
-    
+
+
+    @Value("${weekly_hours}")
+    private int weeklyHours;
+
     private final TimeSheetRepo timeSheetRepo;
     private final HolidayExcludeUsersService holidayExcludeUsersService;
+    private final UserDirectoryService userDirectoryService;
+
+    // ✅ Authorization header builder
+    private HttpEntity<Void> buildEntityWithAuth() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) {
+            return (HttpEntity<Void>) HttpEntity.EMPTY;
+        }
+
+        HttpServletRequest request = attrs.getRequest();
+        String authHeader = request.getHeader("Authorization");
+
+        HttpHeaders headers = new HttpHeaders();
+        if (authHeader != null && !authHeader.isBlank()) {
+            headers.set("Authorization", authHeader);
+        }
+
+        return new HttpEntity<>(headers);
+    }
 
     public Map<String, Object> getTimesheetFinanceReport(int month, int year) {
+
+        // Step 4️⃣: Get Auth Header and Fetch User Info Cache
+        HttpEntity<Void> entity = buildEntityWithAuth();
+        String authHeader = entity.getHeaders().getFirst("Authorization");
+        Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
 
         // ✅ Step 1: Get holiday dates for users to exclude
         List<LocalDate> holidayDates = holidayExcludeUsersService.getUserHolidayDates(month);
@@ -92,20 +133,222 @@ public class TimesheetFinanceReportService {
             utilizationRateStr = utilizationRate.toPlainString() + "%";
         }
 
-
-        Map<String, Object> response = Map.of(
-            "month", month,
-            "year", year,
-            "totalHolidayDates", holidayDates.size(),
-            "totalWorkingDays", totalWorkingDays,
-            "holidayDates",holidayDates,
-            "totalHoursWorked", totalHours,
-            "totalBillableHours", totalBillableHours,
-            "totalNonBillableHours", totalNonBillableHours,
-            "utilizationRate", utilizationRateStr
-        );
+        // 9. Hours Breakdown
+        Map<String, Object> hoursBreakdown = new LinkedHashMap<>();
+        hoursBreakdown.put("billableHours", totalBillableHours);
+        hoursBreakdown.put("nonBillableHours", totalNonBillableHours);
+        hoursBreakdown.put("leaveHours", 176);
+        hoursBreakdown.put("totalHours", totalHours);
+        
+        // Step 🔟: Build final response
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("month", month);
+        response.put("year", year);
+        response.put("totalHolidayDates", holidayDates.size());
+        response.put("totalWorkingDays", totalWorkingDays);
+        response.put("holidayDates", holidayDates);
+        response.put("totalHoursWorked", totalHours);
+        response.put("totalBillableHours", totalBillableHours);
+        response.put("totalNonBillableHours", totalNonBillableHours);
+        response.put("utilizationRate", utilizationRateStr);
+        response.put("hoursBreakdown", hoursBreakdown);
+        response.put("employeeBreakdown", buildEmployeeBreakdown(month, year, allUsers));
+        response.put("employeeProductivity", buildEmployeeProductivity(month, year, allUsers));
 
         return response;
     }
-    
+    public List<Map<String, Object>> buildEmployeeBreakdown(int month, int year, Map<Long, Map<String, Object>> allUsers) {
+
+        // Step 1️⃣: Define month range
+        LocalDate firstDay = LocalDate.of(year, month, 1);
+        LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+
+        // Step 2️⃣: Fetch all timesheets for the given month & year
+        List<TimeSheet> allTimeSheets = timeSheetRepo.findByWorkDateBetween(firstDay, lastDay)
+                .stream()
+                .filter(ts -> ts.getWorkDate() != null &&
+                        ts.getWorkDate().getMonthValue() == month &&
+                        ts.getWorkDate().getYear() == year)
+                .toList();
+
+        // Step 3️⃣: Get unique user IDs
+        Set<Long> userIds = allTimeSheets.stream()
+                .map(TimeSheet::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Step 5️⃣: Prepare employee breakdown list
+        List<Map<String, Object>> employeeBreakdown = new ArrayList<>();
+
+        for (Long userId : userIds) {
+
+            // Filter timesheets for this user in given month & year
+            List<TimeSheet> userSheets = allTimeSheets.stream()
+                    .filter(ts -> ts.getUserId().equals(userId) &&
+                            ts.getWorkDate().getMonthValue() == month &&
+                            ts.getWorkDate().getYear() == year)
+                    .toList();
+
+            // ✅ Working Days (exclude auto-generated)
+            long workingDays = userSheets.stream()
+                    .filter(ts -> !ts.getAutoGenerated())
+                    .map(TimeSheet::getWorkDate)
+                    .distinct()
+                    .count();
+
+            // ✅ Billable Hours (entries where isBillable = true)
+            BigDecimal billableHours = userSheets.stream()
+                    .filter(ts -> !ts.getAutoGenerated())
+                    .flatMap(ts -> ts.getEntries().stream())
+                    .filter(TimeSheetEntry::isBillable)
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // ✅ Non-Billable Hours (entries where isBillable = false + auto-generated)
+            BigDecimal nonBillableFromEntries = userSheets.stream()
+                    .flatMap(ts -> ts.getEntries().stream())
+                    .filter(e -> !e.isBillable())
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal autoGeneratedHours = userSheets.stream()
+                    .filter(TimeSheet::getAutoGenerated)
+                    .map(TimeSheet::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal nonBillableHours = nonBillableFromEntries.add(autoGeneratedHours);
+
+            // ✅ Leave Hours (fixed 8 for now)
+            BigDecimal leaveHours = BigDecimal.valueOf(8);
+
+            // ✅ Total Hours = Billable + Non-Billable
+            BigDecimal totalHours = billableHours.add(nonBillableHours);
+
+            // ✅ Productivity = (Billable / Total) * 100
+            BigDecimal productivity = BigDecimal.ZERO;
+            if (totalHours.compareTo(BigDecimal.ZERO) > 0) {
+                productivity = billableHours
+                        .divide(totalHours, 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP);
+            }
+
+            // ✅ Resolve name from UMS cache
+            String name = Optional.ofNullable(allUsers.get(userId))
+                    .map(u -> (String) u.get("name"))
+                    .orElse("Unknown User");
+
+            // ✅ Build employee summary map
+            Map<String, Object> emp = new LinkedHashMap<>();
+            emp.put("name", name);
+            emp.put("workingDays", workingDays);
+            emp.put("billableHours", billableHours);
+            emp.put("nonBillableHours", nonBillableHours);
+            emp.put("leaveHours", leaveHours);
+            emp.put("totalHours", totalHours);
+            emp.put("productivity", productivity.toPlainString() + "%");
+
+            employeeBreakdown.add(emp);
+        }
+
+        return employeeBreakdown;
+    }
+        public List<Map<String, Object>> buildEmployeeProductivity(int month, int year, Map<Long, Map<String, Object>> allUsers) {
+
+        // Step 1️⃣: Define date range for month
+        LocalDate firstDay = LocalDate.of(year, month, 1);
+        LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+
+        // Step 2️⃣: Fetch all timesheets for month and year
+        List<TimeSheet> allTimeSheets = timeSheetRepo.findByWorkDateBetween(firstDay, lastDay)
+                .stream()
+                .filter(ts -> ts.getWorkDate() != null &&
+                        ts.getWorkDate().getMonthValue() == month &&
+                        ts.getWorkDate().getYear() == year)
+                .toList();
+
+        // Step 3️⃣: Get distinct user IDs
+        Set<Long> userIds = allTimeSheets.stream()
+                .map(TimeSheet::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Step 5️⃣: Build employee productivity details
+        List<Map<String, Object>> productivityList = new ArrayList<>();
+
+        for (Long userId : userIds) {
+
+            List<TimeSheet> userSheets = allTimeSheets.stream()
+                    .filter(ts -> ts.getUserId().equals(userId))
+                    .toList();
+
+            // ✅ Working Days (exclude auto-generated)
+            long workingDays = userSheets.stream()
+                    .filter(ts -> !Boolean.TRUE.equals(ts.getAutoGenerated()))
+                    .map(TimeSheet::getWorkDate)
+                    .distinct()
+                    .count();
+
+            // ✅ Billable Hours (exclude auto-generated)
+            BigDecimal billableHours = userSheets.stream()
+                    .filter(ts -> !Boolean.TRUE.equals(ts.getAutoGenerated()))
+                    .flatMap(ts -> ts.getEntries().stream())
+                    .filter(TimeSheetEntry::isBillable)
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // ✅ Non-Billable Hours (exclude auto-generated)
+            BigDecimal nonBillableHours = userSheets.stream()
+                    .filter(ts -> !Boolean.TRUE.equals(ts.getAutoGenerated()))
+                    .flatMap(ts -> ts.getEntries().stream())
+                    .filter(e -> !e.isBillable())
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // ✅ Auto-Generated Hours
+            BigDecimal autoGeneratedHours = userSheets.stream()
+                    .filter(TimeSheet::getAutoGenerated)
+                    .map(TimeSheet::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // ✅ Total Hours = billable + non-billable + auto-generated
+            BigDecimal totalHours = billableHours.add(nonBillableHours).add(autoGeneratedHours);
+
+            // ✅ Productivity = (billable + non-billable) / 160 * 100
+            BigDecimal productivity = BigDecimal.ZERO;
+            if (billableHours.add(nonBillableHours).compareTo(BigDecimal.ZERO) > 0) {
+                productivity = billableHours.add(nonBillableHours)
+                        .divide(BigDecimal.valueOf(weeklyHours), 4, RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .setScale(2, RoundingMode.HALF_UP);
+            }
+
+            // ✅ Resolve employee name
+            String name = Optional.ofNullable(allUsers.get(userId))
+                    .map(u -> (String) u.get("name"))
+                    .orElse("Unknown User");
+
+            // ✅ Build productivity record
+            Map<String, Object> prod = new LinkedHashMap<>();
+            prod.put("employeeId", userId);
+            prod.put("employeeName", name);
+            prod.put("workingDays", workingDays);
+            prod.put("billableHours", billableHours);
+            prod.put("nonBillableHours", nonBillableHours);
+            prod.put("autoGeneratedHours", autoGeneratedHours);
+            prod.put("totalHours", totalHours);
+            prod.put("productivity", productivity.toPlainString() + "%");
+
+            productivityList.add(prod);
+        }
+
+        return productivityList;
+    }
+
 }
