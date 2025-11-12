@@ -6,6 +6,7 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/report")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class TimesheetFinanceReportController {
 
     @GetMapping("/monthly_finance")
