@@ -16,14 +16,14 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/report")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 @RequiredArgsConstructor
-public class TimeSheetReportFinance {
+public class TimeSheetReportFinanceController {
 
     private final TimesheetFinanceReportService timesheetFinanceReportService;
 
     @GetMapping("/monthly_finance_real")
     public ResponseEntity<Map<String, Object>> getMonthlyFinanceReport() {
 
-        Map<String, Object> response = timesheetFinanceReportService.getTimesheetFinanceReport();
+        Map<String, Object> response = timesheetFinanceReportService.getTimesheetFinanceReport(11, 2025);
         return ResponseEntity.ok(response);
     }
     
