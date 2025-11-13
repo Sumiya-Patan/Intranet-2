@@ -9,7 +9,7 @@ import java.util.*;
 @CrossOrigin(origins = "*", allowedHeaders = "*")
 public class MockTimesheetFinanceReportController {
 
-    @GetMapping("/monthly_finance/mock")
+    @GetMapping("/monthly_finance")
     public ResponseEntity<Map<String, Object>> getMonthlyFinanceReport() {
         Map<String, Object> response = new LinkedHashMap<>();
 

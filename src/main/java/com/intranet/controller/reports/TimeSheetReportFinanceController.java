@@ -21,7 +21,7 @@ public class TimeSheetReportFinanceController {
 
     private final TimesheetFinanceReportService timesheetFinanceReportService;
 
-    @GetMapping("/monthly_finance")
+    @GetMapping("/monthly_finance/real")
     public ResponseEntity<Map<String, Object>> getMonthlyFinanceReport(
         @RequestParam(required = false) Integer month,
         @RequestParam(required = false) Integer year
