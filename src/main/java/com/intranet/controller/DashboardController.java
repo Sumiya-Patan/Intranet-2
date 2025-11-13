@@ -79,4 +79,43 @@ public class DashboardController {
     ) {
         return ResponseEntity.ok(dashboardService.getDashboardSummary(user.getId(), LocalDate.now().withDayOfMonth(1), LocalDate.now().with(TemporalAdjusters.lastDayOfMonth())));
     }
+
+    @GetMapping("/summary/lastMonth")
+    @Operation(summary = "Get summary for the last 1 month window")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getLastMonthSummary(
+            @CurrentUser UserDTO user
+    ) {
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusMonths(1);   // 10 Oct
+        LocalDate endDate = today;                   // 10 Nov
+
+        return ResponseEntity.ok(
+                dashboardService.getDashboardSummary(
+                        user.getId(),
+                        startDate,
+                        endDate
+                )
+        );
+    }
+
+    @GetMapping("/summary/last3Months")
+    @Operation(summary = "Get summary for the last 3 months window")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getLast3MonthsSummary(
+            @CurrentUser UserDTO user
+    ) {
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusMonths(3);  // 10 Aug
+        LocalDate endDate = today;                  // 10 Nov
+
+        return ResponseEntity.ok(
+                dashboardService.getDashboardSummary(
+                        user.getId(),
+                        startDate,
+                        endDate
+                )
+        );
+    }
+
 }
