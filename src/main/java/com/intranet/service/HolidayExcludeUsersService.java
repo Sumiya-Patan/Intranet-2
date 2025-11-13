@@ -329,5 +329,79 @@ public class HolidayExcludeUsersService {
             .collect(Collectors.toList());
     }
 
+    public List<LocalDate> getUserHolidaysMonthYear(Long userId, int month, int year) {
+    HttpEntity<Void> entity = buildEntityWithAuth();
+
+    // Step 1️⃣: Fetch holidays from LMS
+    String url = String.format("%s/api/holidays/month/%d", lmsBaseUrl, month);
+    ResponseEntity<List<HolidayDTO>> response;
+    try {
+        response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<List<HolidayDTO>>() {}
+        );
+    } catch (Exception e) {
+        throw new IllegalStateException("Failed to fetch holidays from LMS for month: " + month, e);
+    }
+
+    List<HolidayDTO> lmsHolidays = Optional.ofNullable(response.getBody())
+            .orElse(Collections.emptyList());
+
+    // Step 2️⃣: Get excluded holidays for this user
+    List<HolidayExcludeUsers> excluded = repository.findByUserId(userId);
+    Set<LocalDate> excludedDates = excluded.stream()
+            .map(HolidayExcludeUsers::getHolidayDate)
+            .collect(Collectors.toSet());
+
+    // Step 3️⃣: Generate weekend holidays for the given month/year
+    List<HolidayDTO> weekendHolidays = generateWeekendHolidays(month, year);
+
+    // Step 4️⃣: Merge LMS + weekend holidays
+    List<HolidayDTO> allHolidays = new ArrayList<>();
+    allHolidays.addAll(lmsHolidays);
+    allHolidays.addAll(weekendHolidays);
+
+    // Step 5️⃣: Filter holidays where submitTimesheet == false
+    return allHolidays.stream()
+            .filter(h -> {
+                boolean isExcluded = excludedDates.contains(h.getHolidayDate());
+                h.setSubmitTimesheet(isExcluded); // set property
+                return !h.isSubmitTimesheet() // only holidays where user cannot submit
+                        && h.getHolidayDate().getMonthValue() == month
+                        && h.getHolidayDate().getYear() == year;
+            })
+            .map(HolidayDTO::getHolidayDate)
+            .sorted()
+            .toList();
+ }
+
+    private List<HolidayDTO> generateWeekendHolidays(int month, int year) {
+        List<HolidayDTO> weekends = new ArrayList<>();
+        LocalDate firstDay = LocalDate.of(year, month, 1);
+        LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+
+        for (LocalDate date = firstDay; !date.isAfter(lastDay); date = date.plusDays(1)) {
+            DayOfWeek day = date.getDayOfWeek();
+            if (day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY) {
+                HolidayDTO dto = new HolidayDTO();
+                dto.setHolidayId(0L);
+                dto.setHolidayName(day == DayOfWeek.SATURDAY ? "Saturday" : "Sunday");
+                dto.setHolidayDate(date);
+                dto.setHolidayDescription("Casual Monthly Weekend");
+                dto.setType("WEEKEND");
+                dto.setCountry("India");
+                dto.setState("All States");
+                dto.setYear(year);
+                dto.setSubmitTimesheet(false); // cannot submit on weekend
+                dto.setTimeSheetReviews("Weekend Holiday");
+                dto.setAllowedManagers(List.of());
+                weekends.add(dto);
+            }
+        }
+        return weekends;
+        }
+
 }
 
