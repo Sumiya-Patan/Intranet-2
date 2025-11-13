@@ -7,9 +7,9 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/report")
 @CrossOrigin(origins = "*", allowedHeaders = "*")
-public class TimesheetFinanceReportController {
+public class MockTimesheetFinanceReportController {
 
-    @GetMapping("/monthly_finance")
+    @GetMapping("/monthly_finance/mock")
     public ResponseEntity<Map<String, Object>> getMonthlyFinanceReport() {
         Map<String, Object> response = new LinkedHashMap<>();
 
