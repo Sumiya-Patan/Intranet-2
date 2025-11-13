@@ -17,6 +17,8 @@ public class MockTimesheetFinanceReportController {
         response.put("totalWorkingDays", 22);
         response.put("totalBillableHours", 3520);
         response.put("utilizationRate", "80%");
+        response.put("month",11);
+        response.put("year",2025);
 
         // Hours Breakdown
         Map<String, Object> hoursBreakdown = new LinkedHashMap<>();
