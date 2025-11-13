@@ -600,6 +600,57 @@ public class TimesheetFinanceReportService {
     return totalLeaveHours;
         }
 
+   private BigDecimal calculateLeaveHoursForUser(Long userId, int month, int year, String authHeader) {
+
+    // Fetch all leaves for the month using the directory cache
+    List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
+
+    BigDecimal totalLeaveHours = BigDecimal.ZERO;
+
+    LocalDate monthStart = LocalDate.of(year, month, 1);
+    LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+
+    for (LeaveDTO leave : leaves) {
+
+        // ✔ Skip if not the same user
+        if (!leave.getEmployeeId().equals(userId)) {
+            continue;
+        }
+
+        // ✔ Skip non-approved leaves
+        if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {
+            continue;
+        }
+
+        // Adjust range to fit inside this month
+        LocalDate start = leave.getStartDate();
+        LocalDate end = leave.getEndDate();
+
+        // ✔ Trim dates outside this month window
+        LocalDate effectiveStart = start.isBefore(monthStart) ? monthStart : start;
+        LocalDate effectiveEnd = end.isAfter(monthEnd) ? monthEnd : end;
+
+        // Loop through all dates in the range
+        LocalDate date = effectiveStart;
+        while (!date.isAfter(effectiveEnd)) {
+
+            // ✔ Only count Monday–Friday
+            switch (date.getDayOfWeek()) {
+                case SATURDAY:
+                case SUNDAY:
+                    break; // skip weekends
+
+                default:
+                    // count as leave hours
+                    totalLeaveHours = totalLeaveHours.add(BigDecimal.valueOf(leaveHours));
+            }
+
+            date = date.plusDays(1);
+        }
+    }
+
+    return totalLeaveHours;
+        }
 
 
 }
