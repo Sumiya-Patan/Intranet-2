@@ -20,10 +20,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import com.intranet.dto.lms.LeaveDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.service.HolidayExcludeUsersService;
+import com.intranet.util.cache.LeaveDirectoryService;
 import com.intranet.util.cache.ProjectDirectoryService;
 import com.intranet.util.cache.UserDirectoryService;
 
@@ -38,10 +40,15 @@ public class TimesheetFinanceReportService {
     @Value("${weekly_hours}")
     private int weeklyHours;
 
+
+    @Value("${leave.daily.hours}")
+    private int leaveHours;
+
     private final TimeSheetRepo timeSheetRepo;
     private final HolidayExcludeUsersService holidayExcludeUsersService;
     private final UserDirectoryService userDirectoryService;
     private final ProjectDirectoryService projectDirectoryService;
+    private final LeaveDirectoryService leaveDirectoryService;
 
     // ✅ Authorization header builder
     private HttpEntity<Void> buildEntityWithAuth() {
@@ -69,6 +76,7 @@ public class TimesheetFinanceReportService {
         Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
         Map<Long, Map<String, Object>> projectDirectory =
                 projectDirectoryService.fetchAllProjects(authHeader);
+        
 
         // ✅ Step 1: Get holiday dates for users to exclude
         List<LocalDate> holidayDates = holidayExcludeUsersService.getUserHolidayDates(month);
@@ -142,13 +150,14 @@ public class TimesheetFinanceReportService {
         Map<String, Object> hoursBreakdown = new LinkedHashMap<>();
         hoursBreakdown.put("billableHours", totalBillableHours);
         hoursBreakdown.put("nonBillableHours", totalNonBillableHours);
-        hoursBreakdown.put("leaveHours", 176);
+        hoursBreakdown.put("leaveHours", calculateLeaveHours(month, year, authHeader));
         hoursBreakdown.put("totalHours", totalHours);
         
         // Step 🔟: Build final response
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("month", month);
         response.put("year", year);
+        response.put("totalEmployees", allUsers.size());
         response.put("totalHolidayDates", holidayDates.size());
         response.put("totalWorkingDays", totalWorkingDays);
         response.put("holidayDates", holidayDates);
@@ -542,7 +551,54 @@ public class TimesheetFinanceReportService {
     }
 
     return projectBreakdown;
-}
+        }
+
+    private BigDecimal calculateLeaveHours(int month, int year, String authHeader) {
+
+    // Fetch all leaves for the month using the directory cache
+    List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
+
+    BigDecimal totalLeaveHours = BigDecimal.ZERO;
+
+    LocalDate monthStart = LocalDate.of(year, month, 1);
+    LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+
+    for (LeaveDTO leave : leaves) {
+
+        // ✔ Skip non-approved leaves
+        if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {
+            continue;
+        }
+
+        // Adjust range to fit inside this month
+        LocalDate start = leave.getStartDate();
+        LocalDate end = leave.getEndDate();
+
+        // ✔ Trim dates outside this month window
+        LocalDate effectiveStart = start.isBefore(monthStart) ? monthStart : start;
+        LocalDate effectiveEnd = end.isAfter(monthEnd) ? monthEnd : end;
+
+        // Loop through all dates
+        LocalDate date = effectiveStart;
+        while (!date.isAfter(effectiveEnd)) {
+
+            // ✔ Only count Monday–Friday
+            switch (date.getDayOfWeek()) {
+                case SATURDAY:
+                case SUNDAY:
+                    break;   // skip weekends
+
+                default:
+                    // ✔ Each valid day counts as 8 hours
+                    totalLeaveHours = totalLeaveHours.add(BigDecimal.valueOf(leaveHours));
+            }
+
+            date = date.plusDays(1);
+        }
+    }
+
+    return totalLeaveHours;
+        }
 
 
 
