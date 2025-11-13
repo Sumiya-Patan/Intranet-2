@@ -86,10 +86,8 @@ public class DashboardController {
     public ResponseEntity<?> getLastMonthSummary(
             @CurrentUser UserDTO user
     ) {
-        LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusMonths(1);   // 10 Oct
-        LocalDate endDate = today;                   // 10 Nov
-
+        LocalDate endDate = LocalDate.now().with(TemporalAdjusters.lastDayOfMonth());
+        LocalDate startDate = endDate.minusMonths(2).withDayOfMonth(1);
         return ResponseEntity.ok(
                 dashboardService.getDashboardSummary(
                         user.getId(),
@@ -105,9 +103,8 @@ public class DashboardController {
     public ResponseEntity<?> getLast3MonthsSummary(
             @CurrentUser UserDTO user
     ) {
-        LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusMonths(3);  // 10 Aug
-        LocalDate endDate = today;                  // 10 Nov
+        LocalDate endDate = LocalDate.now().with(TemporalAdjusters.lastDayOfMonth());
+        LocalDate startDate = endDate.minusMonths(3).withDayOfMonth(1);           
 
         return ResponseEntity.ok(
                 dashboardService.getDashboardSummary(
