@@ -4,6 +4,7 @@ import com.intranet.dto.LeavesAndHolidaysDTO;
 import com.intranet.dto.MonthlyUserReportDTO;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.WeeklySummaryDTO;
+import com.intranet.dto.lms.UserLeaveBreakdown;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetRepo;
@@ -74,21 +75,6 @@ public class MonthlyUserReportService {
         List<TimeSheet> timeSheets = timeSheetRepo
                 .findByUserIdAndWorkDateBetween(userId, startOfMonth, endOfMonth);
 
-        if (timeSheets.isEmpty()) {
-            return MonthlyUserReportDTO.builder()
-                    .employeeId(userId)
-                    .employeeName(Optional.ofNullable(allUsers.get(userId))
-                                .map(u -> (String) u.get("name"))
-                                .orElse("Unknown User"))
-                    .totalHoursWorked(BigDecimal.ZERO)
-                    .billableHours(BigDecimal.ZERO)
-                    .nonBillableHours(BigDecimal.ZERO)
-                    .activeProjectsCount(0)
-                    .leavesAndHolidays(new LeavesAndHolidaysDTO(BigDecimal.ZERO, 0, Collections.emptyList(), Collections.emptyList()))
-                    .weeklySummaryHistory(new ArrayList<>())
-                    .build();
-        }
-
         // 2️⃣ Flatten all entries
         List<TimeSheetEntry> allEntries = timeSheets.stream()
                 .flatMap(ts -> ts.getEntries().stream())
@@ -156,21 +142,27 @@ public class MonthlyUserReportService {
         List<LocalDate> HolidayDates = holidayService.getUserHolidaysMonthYear(userId, month, year);
         int totalHolidays = HolidayDates.size();
 
-        BigDecimal totalLeavesHrs = timesheetFinanceReportService.calculateLeaveHoursForUser(userId, month, year,authHeader);
-       
-        
 
+        UserLeaveBreakdown totalLeavesData = timesheetFinanceReportService.calculateLeaveDetailsForUser(userId, month, year,authHeader);
 
         LeavesAndHolidaysDTO leavesAndHolidays = new LeavesAndHolidaysDTO();
         leavesAndHolidays.setTotalHolidays(totalHolidays);
-        leavesAndHolidays.setTotalLeaves(totalLeavesHrs);
         leavesAndHolidays.setHolidayDates(HolidayDates);
-        leavesAndHolidays.setLeaveDates(Collections.emptyList()); // Placeholder if leave dates are tracked separately
+        leavesAndHolidays.setLeaveDates(totalLeavesData.getLeaveDates());
+        leavesAndHolidays.setTotalLeavesHours(totalLeavesData.getTotalHours());
 
          // Project Summaries
 
         
-        List<Map<String, Object>> ProjectSummaries=timesheetFinanceReportService.buildProjectBreakdown(month, year, projectDirectory);
+        List<Map<String, Object>> ProjectSummaries =
+       timesheetFinanceReportService.buildProjectBreakdownForUser(
+        userId,
+        month,
+        year,
+        projectDirectory
+    );
+
+        
         String employeeName = Optional.ofNullable(allUsers.get(userId))
         .map(u -> (String) u.get("name"))
         .orElse("Unknown User");

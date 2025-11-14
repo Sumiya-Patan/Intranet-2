@@ -22,6 +22,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.dto.lms.LeaveDTO;
+import com.intranet.dto.lms.UserLeaveBreakdown;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetRepo;
@@ -644,56 +645,64 @@ public class TimesheetFinanceReportService {
     return totalLeaveHours;
         }
 
-   public BigDecimal calculateLeaveHoursForUser(Long userId, int month, int year, String authHeader) {
+        public UserLeaveBreakdown calculateLeaveDetailsForUser(
+                Long userId, int month, int year, String authHeader) {
 
-    // Fetch all leaves for the month using the directory cache
-    List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
+        // Fetch all leaves for the month using LMS cache
+        List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
 
-    BigDecimal totalLeaveHours = BigDecimal.ZERO;
+        BigDecimal totalLeaveHours = BigDecimal.ZERO;
+        int totalLeaveDays = 0;
+        List<LocalDate> leaveDates = new ArrayList<>();
 
-    LocalDate monthStart = LocalDate.of(year, month, 1);
-    LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
 
-    for (LeaveDTO leave : leaves) {
+        for (LeaveDTO leave : leaves) {
 
-        // ✔ Skip if not the same user
-        if (!leave.getEmployeeId().equals(userId)) {
-            continue;
+                // Skip different user
+                if (!leave.getEmployeeId().equals(userId)) {
+                continue;
+                }
+
+                // Skip non-approved leaves
+                if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {
+                continue;
+                }
+
+                LocalDate start = leave.getStartDate();
+                LocalDate end = leave.getEndDate();
+
+                // Clamp to month
+                LocalDate effectiveStart = start.isBefore(monthStart) ? monthStart : start;
+                LocalDate effectiveEnd = end.isAfter(monthEnd) ? monthEnd : end;
+
+                // Iterate dates
+                LocalDate date = effectiveStart;
+                while (!date.isAfter(effectiveEnd)) {
+
+                switch (date.getDayOfWeek()) {
+                        case SATURDAY:
+                        case SUNDAY:
+                        break; // skip weekends
+
+                        default:
+                        totalLeaveHours = totalLeaveHours.add(BigDecimal.valueOf(leaveHours));
+                        totalLeaveDays++;
+                        leaveDates.add(date);
+                }
+
+                date = date.plusDays(1);
+                }
         }
 
-        // ✔ Skip non-approved leaves
-        if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {
-            continue;
-        }
+        // Build response object
+        UserLeaveBreakdown breakdown = new UserLeaveBreakdown();
+        breakdown.totalHours = totalLeaveHours;
+        breakdown.totalDays = totalLeaveDays;
+        breakdown.leaveDates = leaveDates;
 
-        // Adjust range to fit inside this month
-        LocalDate start = leave.getStartDate();
-        LocalDate end = leave.getEndDate();
-
-        // ✔ Trim dates outside this month window
-        LocalDate effectiveStart = start.isBefore(monthStart) ? monthStart : start;
-        LocalDate effectiveEnd = end.isAfter(monthEnd) ? monthEnd : end;
-
-        // Loop through all dates in the range
-        LocalDate date = effectiveStart;
-        while (!date.isAfter(effectiveEnd)) {
-
-            // ✔ Only count Monday–Friday
-            switch (date.getDayOfWeek()) {
-                case SATURDAY:
-                case SUNDAY:
-                    break; // skip weekends
-
-                default:
-                    // count as leave hours
-                    totalLeaveHours = totalLeaveHours.add(BigDecimal.valueOf(leaveHours));
-            }
-
-            date = date.plusDays(1);
-        }
-    }
-
-    return totalLeaveHours;
+        return breakdown;
         }
 
         private List<Map<String, Object>> buildLeaveHoursBreakdown(
@@ -794,5 +803,79 @@ public class TimesheetFinanceReportService {
     return breakdown;
         }
 
+        public List<Map<String, Object>> buildProjectBreakdownForUser(
+        Long userId,
+        int month,
+        int year,
+        Map<Long, Map<String, Object>> projectDirectory
+) {
+
+    // Step 1: Define month range
+    LocalDate firstDay = LocalDate.of(year, month, 1);
+    LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+
+    // Step 2: Fetch NON-auto-generated timesheets for THIS user only
+    List<TimeSheet> userSheets = timeSheetRepo.findByUserIdAndWorkDateBetween(userId, firstDay, lastDay)
+            .stream()
+            .filter(ts -> ts.getWorkDate() != null &&
+                    ts.getWorkDate().getMonthValue() == month &&
+                    ts.getWorkDate().getYear() == year)
+            .filter(ts -> !Boolean.TRUE.equals(ts.getAutoGenerated()))
+            .collect(Collectors.toList());
+
+    // Step 3: Collect entries only for this user
+    List<TimeSheetEntry> userEntries = userSheets.stream()
+            .flatMap(ts -> ts.getEntries().stream())
+            .collect(Collectors.toList());
+
+    // Step 4: Group by project ID
+    Map<Long, List<TimeSheetEntry>> userProjectMap = userEntries.stream()
+            .filter(e -> e.getProjectId() != null)
+            .collect(Collectors.groupingBy(TimeSheetEntry::getProjectId));
+
+    List<Map<String, Object>> projectBreakdown = new ArrayList<>();
+
+    // Step 5: Build project summary per project
+    for (Map.Entry<Long, List<TimeSheetEntry>> entry : userProjectMap.entrySet()) {
+
+        Long projectId = entry.getKey();
+        List<TimeSheetEntry> projectEntries = entry.getValue();
+
+        Map<String, Object> projectInfo = projectDirectory.get(projectId);
+        if (projectInfo == null) continue;
+
+        String projectName = (String) projectInfo.getOrDefault("name", "Unknown Project");
+
+        // Total hours
+        BigDecimal totalHours = projectEntries.stream()
+                .map(TimeSheetEntry::getHoursWorked)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal billableHours = projectEntries.stream()
+                .filter(TimeSheetEntry::isBillable)
+                .map(TimeSheetEntry::getHoursWorked)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal nonBillableHours = projectEntries.stream()
+                .filter(e -> !e.isBillable())
+                .map(TimeSheetEntry::getHoursWorked)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Build response
+        Map<String, Object> projectMap = new LinkedHashMap<>();
+        projectMap.put("projectId", projectId);
+        projectMap.put("projectName", projectName);
+        projectMap.put("totalHours", totalHours);
+        projectMap.put("billableHours", billableHours);
+        projectMap.put("nonBillableHours", nonBillableHours);
+
+        projectBreakdown.add(projectMap);
+    }
+
+    return projectBreakdown;
+        }
 
 }

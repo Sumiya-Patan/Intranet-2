@@ -1,4 +1,4 @@
-package com.intranet.controller;
+package com.intranet.controller.reports;
 
 import com.intranet.dto.MonthlyUserReportDTO;
 import com.intranet.service.MonthlyUserReportService;
@@ -12,12 +12,12 @@ public class MonthlyUserReportController {
 
     private final MonthlyUserReportService reportService;
 
-    @GetMapping("/user/{employeeId}/monthly")
+    @GetMapping("/user/monthly")
     public MonthlyUserReportDTO getMonthlyReport(
-            @PathVariable Long employeeId,
             @RequestParam int month,
             @RequestParam int year) {
+        
 
-        return reportService.getMonthlyUserReport(employeeId, month, year);
+        return reportService.getMonthlyUserReport(17L, month, year);
     }
 }

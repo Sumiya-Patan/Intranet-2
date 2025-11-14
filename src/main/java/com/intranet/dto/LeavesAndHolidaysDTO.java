@@ -15,7 +15,7 @@ import java.util.List;
 @Builder
 public class LeavesAndHolidaysDTO {
 
-    private BigDecimal totalLeaves;
+    private BigDecimal totalLeavesHours;
     private int totalHolidays;
     private List<LocalDate> leaveDates;
     private List<LocalDate> holidayDates;
