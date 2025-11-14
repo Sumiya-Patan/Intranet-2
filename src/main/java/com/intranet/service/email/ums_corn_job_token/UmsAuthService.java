@@ -7,6 +7,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.intranet.util.EmailUtil;
+
 @Service
 @RequiredArgsConstructor
 public class UmsAuthService {
@@ -21,6 +23,8 @@ public class UmsAuthService {
     private String umsBaseUrl;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    private final EmailUtil emailUtil;
 
     @Data
     private static class LoginRequest {
@@ -59,6 +63,7 @@ public class UmsAuthService {
             );
 
             if (response.getBody() == null || response.getBody().getAccess_token() == null) {
+                emailUtil.sendEmail(umsEmail, "UMS Login Failed for Weekly Timesheet Remainder", "<h1>UMS login failed: No access token received.</h1>");
                 throw new IllegalStateException("UMS login failed: No access token.");
             }
             
