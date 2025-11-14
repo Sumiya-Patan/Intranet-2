@@ -600,7 +600,7 @@ public class TimesheetFinanceReportService {
     return totalLeaveHours;
         }
 
-   private BigDecimal calculateLeaveHoursForUser(Long userId, int month, int year, String authHeader) {
+   public BigDecimal calculateLeaveHoursForUser(Long userId, int month, int year, String authHeader) {
 
     // Fetch all leaves for the month using the directory cache
     List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
