@@ -33,7 +33,7 @@ import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
-import com.intranet.service.email.ManagerNotificationEmailService;
+import com.intranet.service.email.managerReviews.ManagerNotificationEmailService;
 import com.intranet.util.cache.UserDirectoryService;
 
 import jakarta.servlet.http.HttpServletRequest;

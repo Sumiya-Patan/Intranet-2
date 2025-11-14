@@ -1,4 +1,4 @@
-package com.intranet.service.email;
+package com.intranet.service.email.managerReviews;
 
 import com.intranet.dto.email.WeeklySubmissionEmailDTO;
 import com.intranet.util.EmailUtil;

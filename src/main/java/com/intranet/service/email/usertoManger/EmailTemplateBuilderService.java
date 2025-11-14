@@ -1,4 +1,4 @@
-package com.intranet.service.email;
+package com.intranet.service.email.usertoManger;
 
 import com.intranet.dto.email.TimeSheetSummaryEmailDTO;
 import org.springframework.beans.factory.annotation.Value;

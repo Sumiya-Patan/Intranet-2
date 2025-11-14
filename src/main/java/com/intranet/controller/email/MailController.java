@@ -7,7 +7,7 @@ import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.intranet.service.email.EmailService;
+import com.intranet.service.email.usertoManger.EmailService;
 
 import io.swagger.v3.oas.annotations.Operation;
 

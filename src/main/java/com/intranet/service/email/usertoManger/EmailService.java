@@ -1,4 +1,4 @@
-package com.intranet.service.email;
+package com.intranet.service.email.usertoManger;
 
 import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;

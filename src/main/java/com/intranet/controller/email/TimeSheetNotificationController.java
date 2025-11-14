@@ -2,8 +2,9 @@ package com.intranet.controller.email;
 
 import com.intranet.dto.email.TimeSheetSummaryEmailDTO;
 import com.intranet.dto.email.WeeklySubmissionEmailDTO;
-import com.intranet.service.email.ManagerNotificationEmailService;
-import com.intranet.service.email.TimeSheetNotificationService;
+import com.intranet.service.email.managerReviews.ManagerNotificationEmailService;
+import com.intranet.service.email.managerReviews.TimeSheetNotificationService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
