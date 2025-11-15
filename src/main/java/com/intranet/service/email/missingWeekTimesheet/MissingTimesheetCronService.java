@@ -29,7 +29,7 @@ public class MissingTimesheetCronService {
     private final MissingTimesheetEmailTemplateBuilderService missingTemplateBuilder;
     private final UmsAuthService umsAuthService;
 
-    @Scheduled(cron = "0 0 11 * * MON")
+    @Scheduled(cron = "0 0 9 * * MON")
     // @Scheduled(fixedRate = 1000)
     public void checkMissingTimesheetsLastWeek() {
 
