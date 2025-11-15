@@ -6,7 +6,6 @@ import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.intranet.dto.UserDTO;
@@ -29,8 +28,6 @@ public class ManagerViewReportController {
     @GetMapping("/managerMonthly")
     public ResponseEntity<?> managerMonthlyReport(
         @CurrentUser UserDTO currentUser,
-        @RequestParam(required = false) int month,
-        @RequestParam(required = false) int year,
         HttpServletRequest req
     ) {
         
@@ -42,8 +39,10 @@ public class ManagerViewReportController {
 
         try{
 
-            LocalDate startDate = LocalDate.of(year, month, 1);
-            LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+            // LocalDate startDate = LocalDate.of(year, month, 1);
+            // LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+            LocalDate startDate = LocalDate.now().withDayOfMonth(1);
+            LocalDate endDate = LocalDate.now().withDayOfMonth(startDate.lengthOfMonth());
 
         // Implementation logic to get manager monthly report
         Map<String, Object> managerMonthlyReport = managerMonthlyReportService.generateManagerMonthlyReport(currentUser.getId(),  startDate, endDate,token);
