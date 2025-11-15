@@ -103,7 +103,7 @@ public class ManagerMonthlyReportService {
             return emptySummary(startDate, endDate);
         }
 
-        // ------------------------------
+        // ------------------------------   
         // 2️⃣ Load UMS Users (names + emails)
         // ------------------------------
         Map<Long, String> nameCache = new HashMap<>();
@@ -188,9 +188,39 @@ public class ManagerMonthlyReportService {
         // 6️⃣ Weekly Summary
         // ------------------------------
         Map<String, BigDecimal> weekSummary = weeklySummary(sheets);
+        // ------------------------------
+        // 8️⃣ Project Breakdown
+        List<Map<String, Object>> projectBreakdown =
+                generateProjectBreakdown(sheets, projects, nameCache);
 
         // ------------------------------
-        // 7️⃣ Build Response
+        // 9️⃣ Project Hours Breakdown
+        // ------------------------------
+        Map<String, Object> projectHoursSummary =
+        generateProjectHoursBreakdown(projects, entries);
+
+        // Extract project hours list from projectHoursSummary
+        List<Map<String, Object>> projectHours =
+        (List<Map<String, Object>>) projectHoursSummary.get("projectHours");
+
+        Map<String, Object> contribution =
+        calculateProjectContribution(projectHours);
+
+        Map<Long, BigDecimal> memberHours = generateMemberHours(sheets);
+        Map<Long, Integer> projectCountMap = generateProjectCountMap(projects);
+
+        Map<String, Object> underutilized =
+        generateUnderutilizedInsight(memberHours, nameCache);
+
+        Map<String, Object> overworked =
+        generateOverworkedInsight(memberHours, nameCache);
+
+        Map<String, Object> multiProjectWorkers =
+        generateMultiProjectWorkersInsight(projectCountMap, nameCache);
+
+
+        // ------------------------------
+        // 9️ Build Response
         // ------------------------------
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalHours", totalHours);
@@ -205,6 +235,13 @@ public class ManagerMonthlyReportService {
         result.put("weeklySummary", weekSummary);
         result.put("missingTimesheets", missing);
         result.put("uniqueProjectCount", uniqueProjectCount);
+        result.put("projectBreakdown", projectBreakdown);
+        result.put("projectHoursSummary", projectHoursSummary);
+        result.put("projectContribution", contribution);
+        result.put("underutilizedInsight", underutilized);
+        result.put("overworkedInsight", overworked);
+        result.put("multiProjectWorkersInsight", multiProjectWorkers);
+
 
         return result;
     }
@@ -404,6 +441,389 @@ public class ManagerMonthlyReportService {
         }
 
         return total;
+    }
+        private List<Map<String, Object>> generateProjectBreakdown(
+            List<TimeSheet> sheets,
+            List<Map<String, Object>> projects,
+            Map<Long, String> nameCache
+        ) {
+
+            List<Map<String, Object>> breakdownList = new ArrayList<>();
+
+            // Flatten all entries once
+            List<TimeSheetEntry> allEntries = sheets.stream()
+                    .flatMap(s -> s.getEntries().stream())
+                    .collect(Collectors.toList());
+
+            for (Map<String, Object> project : projects) {
+
+                Long projectId = ((Number) project.get("id")).longValue();
+                String projectName = (String) project.get("name");
+
+                List<Map<String, Object>> members =
+                        (List<Map<String, Object>>) project.getOrDefault("members", new ArrayList<>());
+
+                // ==== PROJECT-LEVEL CALCULATIONS ====
+
+                BigDecimal billable = BigDecimal.ZERO;
+                BigDecimal nonBillable = BigDecimal.ZERO;
+
+                for (TimeSheetEntry e : allEntries) {
+                    if (e.getProjectId() != null && e.getProjectId().equals(projectId)) {
+                        if (e.isBillable()) billable = billable.add(e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO);
+                        else nonBillable = nonBillable.add(e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO);
+                    }
+                }
+
+                BigDecimal total = billable.add(nonBillable);
+
+                double billablePercentage = total.compareTo(BigDecimal.ZERO) == 0
+                        ? 0.0
+                        : billable.divide(total, 4, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100))
+                                .setScale(2, RoundingMode.HALF_UP)
+                                .doubleValue();
+
+                // ==== MEMBER CONTRIBUTIONS ====
+
+                List<Map<String, Object>> memberList = new ArrayList<>();
+
+                for (Map<String, Object> m : members) {
+
+                    Long userId = ((Number) m.get("id")).longValue();
+                    String userName = nameCache.getOrDefault(userId, (String) m.get("name"));
+
+                    BigDecimal userBill = BigDecimal.ZERO;
+                    BigDecimal userNonBill = BigDecimal.ZERO;
+
+                    // Filter entries per user & project
+                    for (TimeSheetEntry e : allEntries) {
+                        if (e.getProjectId() != null &&
+                            e.getProjectId().equals(projectId) &&
+                            e.getTimeSheet().getUserId().equals(userId)) {
+
+                            BigDecimal hrs = e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO;
+
+                            if (e.isBillable()) userBill = userBill.add(hrs);
+                            else userNonBill = userNonBill.add(hrs);
+                        }
+                    }
+
+                    BigDecimal userTotal = userBill.add(userNonBill);
+
+                    double userBillPct = userTotal.compareTo(BigDecimal.ZERO) == 0
+                            ? 0.0
+                            : userBill.divide(userTotal, 4, RoundingMode.HALF_UP)
+                                    .multiply(BigDecimal.valueOf(100))
+                                    .setScale(2, RoundingMode.HALF_UP)
+                                    .doubleValue();
+
+                    double contribution = total.compareTo(BigDecimal.ZERO) == 0
+                            ? 0.0
+                            : userTotal.divide(total, 4, RoundingMode.HALF_UP)
+                                    .multiply(BigDecimal.valueOf(100))
+                                    .setScale(2, RoundingMode.HALF_UP)
+                                    .doubleValue();
+
+                    Map<String, Object> userMap = new HashMap<>();
+                    userMap.put("userId", userId);
+                    userMap.put("userName", userName);
+                    userMap.put("billableHours", userBill);
+                    userMap.put("nonBillableHours", userNonBill);
+                    userMap.put("totalHours", userTotal);
+                    userMap.put("billablePercentage", userBillPct);
+                    userMap.put("contribution", contribution);
+
+                    memberList.add(userMap);
+                }
+
+                // BUILD PROJECT MAP
+                Map<String, Object> projectMap = new LinkedHashMap<>();
+                projectMap.put("projectId", projectId);
+                projectMap.put("projectName", projectName);
+                projectMap.put("billableHours", billable);
+                projectMap.put("nonBillableHours", nonBillable);
+                projectMap.put("totalHours", total);
+                projectMap.put("billablePercentage", billablePercentage);
+                projectMap.put("membersContribution", memberList);
+
+                breakdownList.add(projectMap);
+            }
+
+            return breakdownList;
+        }
+        private Map<String, Object> generateProjectHoursBreakdown(
+            List<Map<String, Object>> projects,
+            List<TimeSheetEntry> allEntries
+    ) {
+
+        List<Map<String, Object>> projectBreakdownList = new ArrayList<>();
+
+        BigDecimal grandTotalHours = BigDecimal.ZERO;
+        BigDecimal grandBillable = BigDecimal.ZERO;
+        BigDecimal grandNonBillable = BigDecimal.ZERO;
+        BigDecimal sumProjectBillablePercentages = BigDecimal.ZERO;
+
+        for (Map<String, Object> project : projects) {
+
+            Long projectId = ((Number) project.get("id")).longValue();
+            String projectName = (String) project.get("name");
+
+            // Extract members
+            List<Map<String, Object>> members = (List<Map<String, Object>>) project.get("members");
+
+            // Filter entries for this project
+            List<TimeSheetEntry> projectEntries = allEntries.stream()
+                    .filter(e -> e.getProjectId() != null && e.getProjectId().equals(projectId))
+                    .collect(Collectors.toList());
+
+            // Calculate billable / non-billable
+            BigDecimal billable = projectEntries.stream()
+                    .filter(TimeSheetEntry::isBillable)
+                    .map(e -> e.getHoursWorked() == null ? BigDecimal.ZERO : e.getHoursWorked())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal nonBillable = projectEntries.stream()
+                    .filter(e -> !e.isBillable())
+                    .map(e -> e.getHoursWorked() == null ? BigDecimal.ZERO : e.getHoursWorked())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal total = billable.add(nonBillable);
+
+            // billable %
+            BigDecimal billablePercentage =
+                    total.compareTo(BigDecimal.ZERO) == 0
+                            ? BigDecimal.ZERO
+                            : billable.multiply(BigDecimal.valueOf(100))
+                            .divide(total, 2, RoundingMode.HALF_UP);
+
+            sumProjectBillablePercentages = sumProjectBillablePercentages.add(billablePercentage);
+            grandTotalHours = grandTotalHours.add(total);
+            grandBillable = grandBillable.add(billable);
+            grandNonBillable = grandNonBillable.add(nonBillable);
+
+            
+
+            // Project Summary
+            Map<String, Object> projectMap = new LinkedHashMap<>();
+            projectMap.put("projectId", projectId);
+            projectMap.put("projectName", projectName);
+            projectMap.put("billableHours", billable);
+            projectMap.put("nonBillableHours", nonBillable);
+            projectMap.put("totalHours", total);
+            projectMap.put("billablePercentage", billablePercentage);
+
+            projectBreakdownList.add(projectMap);
+        }
+
+        // average billable percentage
+        BigDecimal avgBillablePercentage =
+                projects.isEmpty()
+                        ? BigDecimal.ZERO
+                        : sumProjectBillablePercentages
+                        .divide(BigDecimal.valueOf(projects.size()), 2, RoundingMode.HALF_UP);
+
+        // Final response for "project hours"
+        Map<String, Object> finalResult = new LinkedHashMap<>();
+        finalResult.put("projectHours", projectBreakdownList);
+        finalResult.put("totalHours", grandTotalHours);
+        finalResult.put("totalBillable", grandBillable);
+        finalResult.put("totalNonBillable", grandNonBillable);
+        finalResult.put("averageBillablePercentage", avgBillablePercentage);
+
+        return finalResult;
+    }
+    private Map<String, Object> calculateProjectContribution(List<Map<String, Object>> projectHours) {
+
+    Map<String, Object> result = new LinkedHashMap<>();
+
+    // Step 1: Calculate global total hours
+    BigDecimal globalTotal = BigDecimal.ZERO;
+    for (Map<String, Object> p : projectHours) {
+        BigDecimal hours = (BigDecimal) p.get("totalHours");
+        globalTotal = globalTotal.add(hours);
+    }
+
+    List<Map<String, Object>> list = new ArrayList<>();
+
+    // Step 2: Calculate contribution for each project
+    for (Map<String, Object> p : projectHours) {
+
+        BigDecimal billable = (BigDecimal) p.get("billableHours");
+        BigDecimal nonBillable = (BigDecimal) p.get("nonBillableHours");
+        BigDecimal total = (BigDecimal) p.get("totalHours");
+
+        BigDecimal contribution = BigDecimal.ZERO;
+
+        if (globalTotal.compareTo(BigDecimal.ZERO) > 0) {
+            contribution = total
+                    .divide(globalTotal, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("projectId", p.get("projectId"));
+        m.put("projectName", p.get("projectName"));
+        m.put("billableHours", billable);
+        m.put("nonBillableHours", nonBillable);
+        m.put("totalHours", total);
+        m.put("contribution", contribution);
+
+        list.add(m);
+    }
+
+    result.put("projectContribution", list);
+    result.put("globalTotalHours", globalTotal);
+
+    return result;
+    }
+    private Map<Long, BigDecimal> generateMemberHours(List<TimeSheet> sheets) {
+
+    Map<Long, BigDecimal> memberHours = new HashMap<>();
+
+    for (TimeSheet sheet : sheets) {
+        Long userId = sheet.getUserId();
+
+        BigDecimal hrs = sheet.getHoursWorked() == null
+                ? BigDecimal.ZERO
+                : sheet.getHoursWorked();
+
+        memberHours.put(userId,
+                memberHours.getOrDefault(userId, BigDecimal.ZERO).add(hrs));
+    }
+
+    return memberHours;
+    }
+    private Map<Long, Integer> generateProjectCountMap(List<Map<String, Object>> projects) {
+
+    Map<Long, Integer> projectCount = new HashMap<>();
+
+    for (Map<String, Object> project : projects) {
+        List<Map<String, Object>> members =
+                (List<Map<String, Object>>) project.getOrDefault("members", new ArrayList<>());
+
+        for (Map<String, Object> m : members) {
+            Long userId = ((Number) m.get("id")).longValue();
+            projectCount.put(userId, projectCount.getOrDefault(userId, 0) + 1);
+        }
+    }
+
+    return projectCount;
+    }
+    private Map<String, Object> generateUnderutilizedInsight(
+        Map<Long, BigDecimal> memberHours,
+        Map<Long, String> memberNames) {
+
+    List<Map<String, Object>> list = new ArrayList<>();
+
+    // Filter < 176
+    List<Map.Entry<Long, BigDecimal>> filtered = memberHours.entrySet()
+            .stream()
+            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(176)) < 0)
+            .sorted(Map.Entry.comparingByValue()) // lowest first
+            .collect(Collectors.toList());
+
+    BigDecimal prev = null;
+    int rank = 0;
+
+    for (Map.Entry<Long, BigDecimal> e : filtered) {
+
+        if (prev == null || e.getValue().compareTo(prev) != 0) {
+            rank++;
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("userId", e.getKey());
+        m.put("userName", memberNames.get(e.getKey()));
+        m.put("totalHours", e.getValue());
+        m.put("rank", rank);
+
+        list.add(m);
+
+        prev = e.getValue();
+    }
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("underutilized", list);
+
+    return result;
+    }
+    private Map<String, Object> generateOverworkedInsight(
+        Map<Long, BigDecimal> memberHours,
+        Map<Long, String> memberNames) {
+
+    List<Map<String, Object>> list = new ArrayList<>();
+
+    // Filter > 176
+    List<Map.Entry<Long, BigDecimal>> filtered = memberHours.entrySet()
+            .stream()
+            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(176)) > 0)
+            .sorted((a, b) -> b.getValue().compareTo(a.getValue())) // highest first
+            .collect(Collectors.toList());
+
+    BigDecimal prev = null;
+    int rank = 0;
+
+    for (Map.Entry<Long, BigDecimal> e : filtered) {
+
+        if (prev == null || e.getValue().compareTo(prev) != 0) {
+            rank++;
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("userId", e.getKey());
+        m.put("userName", memberNames.get(e.getKey()));
+        m.put("totalHours", e.getValue());
+        m.put("rank", rank);
+
+        list.add(m);
+
+        prev = e.getValue();
+    }
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("overworked", list);
+
+    return result;
+    }
+    private Map<String, Object> generateMultiProjectWorkersInsight(
+        Map<Long, Integer> projectCount,
+        Map<Long, String> memberNames) {
+
+    List<Map.Entry<Long, Integer>> sorted = projectCount.entrySet()
+            .stream()
+            .sorted((a, b) -> b.getValue() - a.getValue()) // highest projects first
+            .collect(Collectors.toList());
+
+    List<Map<String, Object>> list = new ArrayList<>();
+
+    Integer prev = null;
+    int rank = 0;
+
+    for (Map.Entry<Long, Integer> e : sorted) {
+
+        if (prev == null || !e.getValue().equals(prev)) {
+            rank++;
+        }
+
+        if (rank > 2) break; // Only top 2 ranks
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("userId", e.getKey());
+        m.put("userName", memberNames.get(e.getKey()));
+        m.put("projectCount", e.getValue());
+        m.put("rank", rank);
+
+        list.add(m);
+
+        prev = e.getValue();
+    }
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("multiProjectWorkers", list);
+
+    return result;
     }
 
 }
