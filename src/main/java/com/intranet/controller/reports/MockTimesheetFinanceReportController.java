@@ -1,6 +1,9 @@
 package com.intranet.controller.reports;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,5 +149,110 @@ public class MockTimesheetFinanceReportController {
         entry.put("hoursWorked", hours);
         return entry;
     }
-    
+    @GetMapping("/sample")
+    public ResponseEntity<Map<String, Object>> getSampleDashboard() {
+
+        Map<String, Object> response = new HashMap<>();
+
+        response.put("title", "Manager Dashboard — Team View");
+        response.put("generatedDate", LocalDate.of(2025, 11, 14).toString());
+        response.put("teamName", "Engineering Team Alpha");
+        response.put("weekRange", "Nov 10 – Nov 16, 2025");
+
+        // ---------------------- Summary Section ---------------------- //
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalHours", 187.5);
+        summary.put("pendingApprovals", 7);
+        summary.put("projectUtilization", 82.4);
+        summary.put("topPerformer", "Sarah Chen");
+        summary.put("topPerformerHours", 42.5);
+        response.put("summary", summary);
+
+        // ---------------------- Team Performance Chart ---------------------- //
+        List<Map<String, Object>> performance = new ArrayList<>();
+        performance.add(Map.of("name", "Sarah Chen", "hours", 42));
+        performance.add(Map.of("name", "Marcus Johnson", "hours", 38));
+        performance.add(Map.of("name", "Emily Rodriguez", "hours", 40));
+        performance.add(Map.of("name", "David Kim", "hours", 35));
+        performance.add(Map.of("name", "Lisa Patel", "hours", 32));
+        response.put("teamPerformance", performance);
+
+        // ---------------------- Productivity Pie ---------------------- //
+        Map<String, Object> distribution = new LinkedHashMap<>();
+        distribution.put("high", 50);
+        distribution.put("medium", 30);
+        distribution.put("low", 20);
+        response.put("productivityDistribution", distribution);
+
+        // ---------------------- Weekly Trend Line Chart ---------------------- //
+        List<Map<String, Object>> weeklyTrend = new ArrayList<>();
+        weeklyTrend.add(Map.of("week", "Week 41", "totalHours", 175));
+        weeklyTrend.add(Map.of("week", "Week 42", "totalHours", 182));
+        weeklyTrend.add(Map.of("week", "Week 43", "totalHours", 178));
+        weeklyTrend.add(Map.of("week", "Week 44", "totalHours", 188));
+        response.put("weeklyTrend", weeklyTrend);
+
+        // ---------------------- Project Allocation ---------------------- //
+        List<Map<String, Object>> projectAllocations = new ArrayList<>();
+
+        projectAllocations.add(Map.of(
+                "project", "Project Apollo",
+                "members", Arrays.asList(
+                        Map.of("name", "Sarah Chen", "hours", 20),
+                        Map.of("name", "Marcus Johnson", "hours", 18),
+                        Map.of("name", "Emily Rodriguez", "hours", 15)
+                )
+        ));
+
+        projectAllocations.add(Map.of(
+                "project", "Project Titan",
+                "members", Arrays.asList(
+                        Map.of("name", "Emily Rodriguez", "hours", 25),
+                        Map.of("name", "David Kim", "hours", 22)
+                )
+        ));
+
+        projectAllocations.add(Map.of(
+                "project", "Project Nova",
+                "members", Arrays.asList(
+                        Map.of("name", "Sarah Chen", "hours", 22.5),
+                        Map.of("name", "Lisa Patel", "hours", 20)
+                )
+        ));
+
+        projectAllocations.add(Map.of(
+                "project", "Project Orion",
+                "members", Arrays.asList(
+                        Map.of("name", "Marcus Johnson", "hours", 20),
+                        Map.of("name", "David Kim", "hours", 13.5),
+                        Map.of("name", "Lisa Patel", "hours", 11.5)
+                )
+        ));
+
+        response.put("projectAllocation", projectAllocations);
+
+        // ---------------------- Approval Queue ---------------------- //
+        List<Map<String, Object>> approvals = new ArrayList<>();
+
+        approvals.add(Map.of("employee", "Sarah Chen", "date", "2025-11-15", "hours", 8.5, "project", "Project Apollo", "status", "Pending"));
+        approvals.add(Map.of("employee", "Marcus Johnson", "date", "2025-11-15", "hours", 8, "project", "Project Orion", "status", "Pending"));
+        approvals.add(Map.of("employee", "Emily Rodriguez", "date", "2025-11-14", "hours", 9, "project", "Project Titan", "status", "Approved"));
+        approvals.add(Map.of("employee", "David Kim", "date", "2025-11-15", "hours", 7.5, "project", "Project Titan", "status", "Pending"));
+        approvals.add(Map.of("employee", "Lisa Patel", "date", "2025-11-15", "hours", 6.5, "project", "Project Nova", "status", "Pending"));
+
+        response.put("approvalQueue", approvals);
+
+        // ---------------------- Team Insights ---------------------- //
+        Map<String, Object> insights = new LinkedHashMap<>();
+        insights.put("underUtilized", Arrays.asList("David Kim (35.5 hrs)", "Lisa Patel (31.5 hrs)"));
+        insights.put("overWorked", Arrays.asList("None identified"));
+        insights.put("missedTimesheets", "All timesheets submitted");
+        insights.put("recommendations", Arrays.asList(
+                "Schedule capacity planning with 2 underutilized members",
+                "7 pending approvals require immediate attention"
+        ));
+        response.put("teamInsights", insights);
+
+        return ResponseEntity.ok(response);
+    }
 }
