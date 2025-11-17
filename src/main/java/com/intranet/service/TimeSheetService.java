@@ -305,7 +305,7 @@ public class TimeSheetService {
     
     public List<ProjectTaskView> getUserTaskView(Long userId) {
         // 🔹 Step 1: Call PMS API dynamically using configured base URL
-        String url = String.format("%s/tasks/assignee/%d", pmsBaseUrl, userId);
+        String url = String.format("%s/tasks/user/%d/tasks", pmsBaseUrl, userId);
 
         ResponseEntity<List<Map<String, Object>>> response =
                 restTemplate.exchange(
