@@ -1,7 +1,6 @@
 package com.intranet.service.email.MonthEndRemainder;
 
 import com.intranet.dto.email.MissingTimesheetEmailDTO;
-import com.intranet.service.email.missingWeekTimesheet.MissingTimesheetEmailTemplateBuilderService;
 import com.intranet.service.email.ums_corn_job_token.UmsAuthService;
 import com.intranet.util.EmailUtil;
 import com.intranet.util.cache.UserDirectoryService;
@@ -27,7 +26,6 @@ public class MonthlyTimesheetReminderService {
     private final UserDirectoryService userDirectoryService;
     private final UmsAuthService umsAuthService;
     private final EmailUtil emailUtil;
-    private final MissingTimesheetEmailTemplateBuilderService emailTemplateBuilder;
     private final MonthEndTimesheetEmailTemplateBuilderService monthEndEmailTemplateBuilderService;
 
     /**

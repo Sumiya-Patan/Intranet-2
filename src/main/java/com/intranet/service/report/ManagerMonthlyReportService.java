@@ -569,9 +569,6 @@ public class ManagerMonthlyReportService {
             Long projectId = ((Number) project.get("id")).longValue();
             String projectName = (String) project.get("name");
 
-            // Extract members
-            List<Map<String, Object>> members = (List<Map<String, Object>>) project.get("members");
-
             // Filter entries for this project
             List<TimeSheetEntry> projectEntries = allEntries.stream()
                     .filter(e -> e.getProjectId() != null && e.getProjectId().equals(projectId))
