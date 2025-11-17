@@ -19,9 +19,16 @@ public class MonthlyUserReportController {
     @GetMapping("/user_monthly")
     public ResponseEntity<?> getMonthlyReport(
             @CurrentUser UserDTO currentUser,
-            @RequestParam int month,
-            @RequestParam int year) {
+            @RequestParam(required = false) int month,
+            @RequestParam(required = false) int year) {
         try {
+        if (month <= 0 || month > 12 || year <= 0) {
+            return ResponseEntity.badRequest().body("Invalid month or year parameter");
+        }
+        if (month == 0 && year == 0) {
+            month = java.time.LocalDate.now().getMonthValue();
+            year = java.time.LocalDate.now().getYear();
+        }
         MonthlyUserReportDTO report = reportService.getMonthlyUserReport(currentUser.getId(), month, year);
         return ResponseEntity.ok(report);
         } catch (Exception e) {
