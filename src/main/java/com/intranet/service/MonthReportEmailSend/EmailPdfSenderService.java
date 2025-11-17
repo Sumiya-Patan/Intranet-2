@@ -21,7 +21,7 @@ public class EmailPdfSenderService {
 
         helper.setTo(toEmail);
         helper.setSubject("Monthly Timesheet PDF Report - " + employeeName);
-        helper.setText("Hi,\n\nPlease find attached your monthly timesheet report.\n\nRegards,\nTimesheet System");
+        helper.setText("Hi,\n\nPlease find attached your monthly timesheet report.\n\nRegards,\nTimesheet Management System");
 
         helper.addAttachment("Monthly_Report.pdf", new ByteArrayResource(pdfBytes));
 
