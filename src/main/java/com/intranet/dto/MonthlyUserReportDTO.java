@@ -24,7 +24,7 @@ public class MonthlyUserReportDTO {
     private LeavesAndHolidaysDTO leavesAndHolidays;
     private List<WeekSummaryDTO> weeklySummaryHistory;
     private Map<String, Double> dayWiseSummary;
-    private List<Map<String, Object>>ProjectSummaries;
+    private Map<String, Object>ProjectSummaries;
 
        
 

@@ -17,6 +17,8 @@ public class LeavesAndHolidaysDTO {
 
     private BigDecimal totalLeavesHours;
     private int totalHolidays;
+    private int totalLeavesDays;
+    private int totalHolidaysDays;
     private List<LocalDate> leaveDates;
     private List<LocalDate> holidayDates;
 }

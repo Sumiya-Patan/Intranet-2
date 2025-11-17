@@ -144,17 +144,19 @@ public class MonthlyUserReportService {
 
 
         UserLeaveBreakdown totalLeavesData = timesheetFinanceReportService.calculateLeaveDetailsForUser(userId, month, year,authHeader);
-
+        
+        
         LeavesAndHolidaysDTO leavesAndHolidays = new LeavesAndHolidaysDTO();
         leavesAndHolidays.setTotalHolidays(totalHolidays);
         leavesAndHolidays.setHolidayDates(HolidayDates);
         leavesAndHolidays.setLeaveDates(totalLeavesData.getLeaveDates());
         leavesAndHolidays.setTotalLeavesHours(totalLeavesData.getTotalHours());
+        leavesAndHolidays.setTotalLeavesDays(totalLeavesData.getTotalDays());
 
          // Project Summaries
 
         
-        List<Map<String, Object>> ProjectSummaries =
+        Map<String,Object> ProjectSummaries =
        timesheetFinanceReportService.buildProjectBreakdownForUser(
         userId,
         month,
