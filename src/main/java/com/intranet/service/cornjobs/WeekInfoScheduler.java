@@ -17,18 +17,34 @@ public class WeekInfoScheduler {
     private final WeekInfoService weekInfoService;
 
     /**
-     * Cron: run at 12:05 AM on the 1st day of each month
-     * 0 5 0 1 * *  → (second=0, minute=5, hour=0, day=1, month=*, dayOfWeek=*)
+     * Run at 12:05 AM on 1st day of each month
+     * 0 5 0 1 * *
      */
     // @Scheduled(cron = "0 5 0 1 * *")
     @Scheduled(fixedRate = 10000)
-    public void generateCurrentMonthWeeks() {
-        LocalDate now = LocalDate.now();
-        int year = now.getYear();
-        int month = now.getMonthValue();
+    public void generateWeeksForLastSixMonths() {
 
-        log.info("🕒 Starting monthly WeekInfo generation job for {}/{}", month, year);
-        weekInfoService.generateWeeksForMonth(year, month);
-        log.info("✅ Finished monthly WeekInfo generation job for {}/{}", month, year);
+        LocalDate now = LocalDate.now();
+
+        log.info("🕒 Starting WeekInfo generation job for last 6 months...");
+
+        // Loop through last 6 months including current
+        for (int i = 0; i < 6; i++) {
+
+            LocalDate targetMonth = now.minusMonths(i);
+
+            int year = targetMonth.getYear();
+            int month = targetMonth.getMonthValue();
+
+            log.info("📅 Generating WeekInfo for {}/{}", month, year);
+
+            try {
+                weekInfoService.generateWeeksForMonth(year, month);
+            } catch (Exception e) {
+                log.error("❌ Error generating WeekInfo for {}/{}: {}", month, year, e.getMessage());
+            }
+        }
+
+        log.info("✅ Completed WeekInfo generation for last 6 months.");
     }
 }
