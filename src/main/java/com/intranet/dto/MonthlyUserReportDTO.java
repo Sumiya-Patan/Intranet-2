@@ -26,6 +26,4 @@ public class MonthlyUserReportDTO {
     private Map<String, Double> dayWiseSummary;
     private Map<String, Object>ProjectSummaries;
 
-       
-
 }
