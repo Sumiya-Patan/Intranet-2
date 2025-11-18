@@ -211,7 +211,7 @@ public class PdfTemplateBuilder {
                 employeeName,
                 totalHours, billable, nonBillable, activeProjects,
                 lh.getTotalLeavesDays(), lh.getTotalLeavesHours(),
-                lh.getTotalHolidaysDays(),
+                lh.getTotalHolidays(),
                 dayRows,
                 projectRows,
                 weeklyHtml,
