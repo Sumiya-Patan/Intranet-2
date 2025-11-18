@@ -395,7 +395,7 @@ public class ManagerMonthlyReportService {
         Map<String, BigDecimal> result = new LinkedHashMap<>();
 
         for (DayOfWeek d : DayOfWeek.values()) {
-            if (d == DayOfWeek.SUNDAY) continue;
+            // if (d == DayOfWeek.SUNDAY) continue;
 
             long mins = 0;
             for (TimeSheet s : sheets) {
