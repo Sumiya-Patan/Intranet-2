@@ -27,7 +27,7 @@ public class ManagerViewReportController {
 
     @GetMapping("/managerMonthly")
     public ResponseEntity<?> managerMonthlyReport(
-            // @CurrentUser UserDTO currentUser,
+            @CurrentUser UserDTO currentUser,
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
             HttpServletRequest req
@@ -51,8 +51,7 @@ public class ManagerViewReportController {
             // Generate report
             Map<String, Object> report =
                     managerMonthlyReportService.generateManagerMonthlyReport(
-                            // currentUser.getId(),
-                            17L,
+                            currentUser.getId(),
                             startDate,
                             endDate,
                             token
