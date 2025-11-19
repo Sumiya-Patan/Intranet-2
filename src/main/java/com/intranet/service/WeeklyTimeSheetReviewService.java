@@ -25,6 +25,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import com.intranet.dto.HolidayDTO;
 import com.intranet.dto.email.WeeklySubmissionEmailDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
@@ -48,6 +49,7 @@ public class WeeklyTimeSheetReviewService {
         private final TimeSheetReviewRepo timeSheetReviewRepo;
         private final UserDirectoryService userDirectoryService;
         private final ManagerNotificationEmailService managerNotificationEmailService;
+        private final HolidayExcludeUsersService holidayExcludeUsersService;
 
         @Value("${tms.api.base-url}")
         private String tmsBaseUrl;
@@ -74,6 +76,17 @@ public class WeeklyTimeSheetReviewService {
 
         return new HttpEntity<>(headers);
         }
+        private Map<String, Object> convertToMap(HolidayDTO h) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("holidayId", h.getHolidayId());
+    map.put("holidayName", h.getHolidayName());
+    map.put("holidayDate", h.getHolidayDate().toString());
+    map.put("isLeave", !h.isLeave());  
+    map.put("description", h.getHolidayDescription());
+    map.put("submitTimesheet", h.isSubmitTimesheet());
+
+    return map;
+}
 
         @Transactional
     public String submitWeeklyTimeSheets(Long userId, List<Long> timeSheetIds) {
@@ -103,26 +116,37 @@ public class WeeklyTimeSheetReviewService {
         throw new IllegalArgumentException("User not authorized to submit these timesheets.");
     }
 
-    // ✅ Step 2: Fetch holidays for the current month
-    HttpEntity<Void> entity = buildEntityWithAuth();
-    String url = String.format("%s/api/holidays/currentMonthLeaves", tmsBaseUrl);
+    // // ✅ Step 2: Fetch holidays for the current month
+    // HttpEntity<Void> entity = buildEntityWithAuth();
+    // String url = String.format("%s/api/holidays/currentMonthLeaves", tmsBaseUrl);
 
-    List<Map<String, Object>> holidays = List.of();
-    try {
-        ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
-        holidays = Optional.ofNullable(response.getBody()).orElse(List.of());
-    } catch (Exception e) {
-        System.err.println("⚠️ Unable to fetch holidays for current month: " + e.getMessage());
-    }
-
-    Map<LocalDate, Map<String, Object>> holidayMap = holidays.stream()
-            .filter(h -> h.get("holidayDate") != null)
-            .collect(Collectors.toMap(
-                    h -> LocalDate.parse(h.get("holidayDate").toString()),
-                    h -> h,
-                    (a, b) -> a
-            ));
+    // List<Map<String, Object>> holidays = List.of();
+    // try {
+    //     ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+    //             url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
+    //     holidays = Optional.ofNullable(response.getBody()).orElse(List.of());
+    // } catch (Exception e) {
+    //     System.err.println("⚠️ Unable to fetch holidays for current month: " + e.getMessage());
+    // }
+    // Map<LocalDate, Map<String, Object>> holidayMap = holidays.stream()
+    //         .filter(h -> h.get("holidayDate") != null)
+    //         .collect(Collectors.toMap(
+    //                 h -> LocalDate.parse(h.get("holidayDate").toString()),
+    //                 h -> h,
+    //                 (a, b) -> a
+    //         ));
+    int month = commonWeek.getStartDate().getMonthValue();
+    int year = commonWeek.getStartDate().getYear();
+    List<HolidayDTO> holidaysR = holidayExcludeUsersService.getUserHolidaysAndLeave(userId, month, year);
+    Map<LocalDate, Map<String, Object>> holidayMap =
+        holidaysR.stream()
+                .filter(h -> h.getHolidayDate() != null)
+                .collect(Collectors.toMap(
+                        HolidayDTO::getHolidayDate,
+                        this::convertToMap,
+                        (a, b) -> a,   // in case of duplicate dates
+                        LinkedHashMap::new
+                ));
 
     // ✅ Step 3: Identify all dates in the week range
     LocalDate start = commonWeek.getStartDate();
