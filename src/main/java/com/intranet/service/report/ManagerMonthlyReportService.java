@@ -236,6 +236,8 @@ public class ManagerMonthlyReportService {
         // 9️ Build Response
         // ------------------------------
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("month", startDate.getMonthValue());
+        result.put("year", startDate.getYear());
         result.put("totalHours", totalHours);
         result.put("billableHours", billableHours);
         result.put("nonBillableHours", nonBillableHours);
