@@ -105,7 +105,7 @@ public class WeeklyTimeSheetReviewService {
 
     // ✅ Step 2: Fetch holidays for the current month
     HttpEntity<Void> entity = buildEntityWithAuth();
-    String url = String.format("%s/api/holidays/currentMonth", tmsBaseUrl);
+    String url = String.format("%s/api/holidays/currentMonthLeaves", tmsBaseUrl);
 
     List<Map<String, Object>> holidays = List.of();
     try {

@@ -24,6 +24,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -160,6 +161,7 @@ public class HolidayExcludeUsersService {
 
         // Step 7️⃣: Build final response list with user exclusions
         return allHolidays.stream()
+                .filter(holiday -> holiday.getHolidayDate().getMonthValue() == month && holiday.getHolidayDate().getYear() == LocalDate.now().getYear())
                 .map(holiday -> {
                     boolean isExcluded = excludedDates.contains(holiday.getHolidayDate());
                     holiday.setSubmitTimesheet(isExcluded);
@@ -210,7 +212,214 @@ public class HolidayExcludeUsersService {
 
         return weekends;
     }
+    public List<HolidayDTO> getUserHolidaysAndLeave(Long userId, int month, int year) {
+        HttpEntity<Void> entity = buildEntityWithAuth();
 
+        // Step 1️⃣: Fetch holidays from LMS
+        String url = String.format("%s/api/holidays/month/%d", lmsBaseUrl, month);
+        ResponseEntity<List<HolidayDTO>> response;
+        try {
+            response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    new ParameterizedTypeReference<List<HolidayDTO>>() {}
+            );
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to fetch holidays from LMS for month: " + month, e);
+        }
+
+        List<HolidayDTO> lmsHolidays = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
+
+        // Step 2️⃣: Get excluded holidays for this user
+        List<HolidayExcludeUsers> excluded = repository.findByUserId(userId);
+        Set<LocalDate> excludedDates = excluded.stream()
+                .map(HolidayExcludeUsers::getHolidayDate)
+                .collect(Collectors.toSet());
+
+        // Step 3️⃣: Preload user cache (manager names)
+        Map<Long, String> userCache = new HashMap<>();
+        try {
+            String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+            ResponseEntity<Map<String, Object>> umsResponse = restTemplate.exchange(
+                    umsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> body = umsResponse.getBody();
+            if (body != null && body.containsKey("users")) {
+                Object usersObj = body.get("users");
+                if (usersObj instanceof List<?>) {
+                    for (Object obj : (List<?>) usersObj) {
+                        if (obj instanceof Map) {
+                            Map<?, ?> u = (Map<?, ?>) obj;
+                            Number idNum = (Number) u.get("user_id");
+                            if (idNum != null) {
+                                Long id = idNum.longValue();
+                                String firstName = u.get("first_name") != null ? u.get("first_name").toString().trim() : "";
+                                String lastName  = u.get("last_name")  != null ? u.get("last_name").toString().trim()  : "";
+                                String fullName  = (firstName + " " + lastName).trim();
+                                userCache.put(id, fullName.isEmpty() ? "Unknown User" : fullName);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to load users from UMS: " + e.getMessage());
+        }
+
+        // Step 4️⃣: Build manager info map for excluded holidays
+        Map<LocalDate, List<ManagerInfoDTO>> managerMap = excluded.stream()
+                .collect(Collectors.groupingBy(
+                        HolidayExcludeUsers::getHolidayDate,
+                        Collectors.mapping(ex -> new ManagerInfoDTO(
+                                ex.getManagerId(),
+                                userCache.getOrDefault(ex.getManagerId(), "Unknown Manager")
+                        ), Collectors.toList())
+                ));
+
+        // Step 5️⃣: Add weekends for the current month
+        List<HolidayDTO> weekendHolidays = generateWeekendHolidays(month);
+
+        // / API: /api/leave-requests/getLeaveRequests/{userId}/{year}/{month}
+    String leaveUrl = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d", lmsBaseUrl, userId, year, month);
+    List<Map<String, Object>> leaveData = Collections.emptyList();
+    try {
+        ResponseEntity<Map<String, Object>> leaveResp = restTemplate.exchange(
+                leaveUrl,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+        Map<String, Object> leaveBody = leaveResp.getBody();
+        if (leaveBody != null && leaveBody.containsKey("data")) {
+            Object dataObj = leaveBody.get("data");
+            if (dataObj instanceof List<?>) {
+                leaveData = (List<Map<String, Object>>) dataObj;
+            }
+        }
+    } catch (Exception ex) {
+        // don't fail the whole flow on leave API error - log and continue
+        System.err.println("⚠️ Failed to fetch leave requests: " + ex.getMessage());
+        leaveData = Collections.emptyList();
+    }
+
+    // Helper: accumulate leave dates into HolidayDTO list
+    List<HolidayDTO> leaveHolidays = new ArrayList<>();
+    DateTimeFormatter dtf = DateTimeFormatter.ISO_LOCAL_DATE;
+
+    for (Map<String, Object> leave : leaveData) {
+        // extract fields safely
+        String status = leave.get("status") != null ? leave.get("status").toString() : "";
+        if (!"APPROVED".equalsIgnoreCase(status) && !"PENDING".equalsIgnoreCase(status)) {
+            // skip rejected or other states
+            continue;
+        }
+
+        String start = (String) leave.get("startDate");
+        String end = (String) leave.get("endDate");
+        String reason = leave.get("reason") != null ? leave.get("reason").toString() : "Leave";
+        Map<String, Object> approvedBy = (Map<String, Object>) leave.get("approvedBy");
+
+        ManagerInfoDTO approvingManager = null;
+
+        // parse dates and iterate range, clip to month
+        LocalDate startDateParsed;
+        LocalDate endDateParsed;
+        try {
+            startDateParsed = LocalDate.parse(start, dtf);
+            endDateParsed = LocalDate.parse(end, dtf);
+        } catch (Exception pe) {
+            // skip invalid date formats
+            continue;
+        }
+
+        // Clip to this month/year
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+
+        LocalDate iterStart = startDateParsed.isBefore(monthStart) ? monthStart : startDateParsed;
+        LocalDate iterEnd = endDateParsed.isAfter(monthEnd) ? monthEnd : endDateParsed;
+
+        if (iterStart.isAfter(iterEnd)) {
+            // nothing in this month
+            continue;
+        }
+
+        // For each date in the clipped range
+        for (LocalDate d = iterStart; !d.isAfter(iterEnd); d = d.plusDays(1)) {
+            DayOfWeek dow = d.getDayOfWeek();
+            if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) {
+                // ignore weekend leave days
+                continue;
+            }
+
+            // Construct HolidayDTO for the leave date
+            HolidayDTO dto = new HolidayDTO();
+            dto.setHolidayId(0L); // generated
+            dto.setHolidayName("Leave Day");
+            dto.setHolidayDate(d);
+            dto.setHolidayDescription(reason);
+            dto.setType("LEAVE");
+            dto.setCountry("India");
+            dto.setState("All States");
+            dto.setYear(d.getYear());
+            dto.setLeave(true);
+
+            // submitTimesheet: if excluded contains this date => true
+            boolean isExcluded = excludedDates.contains(d);
+            dto.setSubmitTimesheet(isExcluded);
+
+            // timeSheetReviews -> Leave Approved or Leave Pending
+            dto.setTimeSheetReviews("APPROVED".equalsIgnoreCase(status) ? "Leave Approved" : "Leave Pending");
+
+            // If approving manager present, add to allowedManagers for this date
+            if (approvingManager != null) {
+                List<ManagerInfoDTO> mgrs = new ArrayList<ManagerInfoDTO>();
+                mgrs.add(approvingManager);
+                dto.setAllowedManagers(mgrs);
+            } else {
+                dto.setAllowedManagers(new ArrayList<ManagerInfoDTO>());
+            }
+
+            leaveHolidays.add(dto);
+        }
+    }
+
+                
+        // Step 6️⃣: Merge LMS holidays + weekend holidays
+        List<HolidayDTO> allHolidays = new ArrayList<>();
+        allHolidays.addAll(lmsHolidays);
+        allHolidays.addAll(weekendHolidays);
+        allHolidays.addAll(leaveHolidays);
+
+        // Step 7️⃣: Build final response list with user exclusions
+        return allHolidays.stream()
+                .filter(holiday -> holiday.getHolidayDate().getMonthValue() == month && holiday.getHolidayDate().getYear() == year)
+                .map(holiday -> {
+                    boolean isExcluded = excludedDates.contains(holiday.getHolidayDate());
+                    holiday.setSubmitTimesheet(isExcluded);
+
+                    if (isExcluded) {
+                        holiday.setTimeSheetReviews("Allowed to Submit on Holiday");
+                        holiday.setAllowedManagers(managerMap.getOrDefault(
+                                holiday.getHolidayDate(), List.of()
+                        ));
+                    } else {
+                        if (holiday.getTimeSheetReviews() != null) {
+                            holiday.setTimeSheetReviews(holiday.getTimeSheetReviews());
+                        }
+                        else{
+                        holiday.setTimeSheetReviews("General Holiday");
+                    }
+                        holiday.setAllowedManagers(List.of());
+                    }
+
+                    return holiday;
+                })
+                .sorted(Comparator.comparing(HolidayDTO::getHolidayDate))
+                .toList();
+    }
 
     public List<HolidayExcludeResponseDTO> getAllByManager(Long managerId) {
     List<HolidayExcludeUsers> users = repository.findByManagerId(managerId);

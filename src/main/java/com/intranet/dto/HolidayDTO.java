@@ -16,6 +16,7 @@ public class HolidayDTO {
     private String state;
     private String country;
     private Integer year;
+    public boolean  isLeave;
     private boolean submitTimesheet;
     private String timeSheetReviews;
     private List<ManagerInfoDTO> allowedManagers; // ✅ new field

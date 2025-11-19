@@ -89,13 +89,33 @@ public class HolidayInfoController {
             return ResponseEntity.ok().body(" Date is not a holiday. You may proceed.");
     }
 
+    @GetMapping("/currentMonthLeaves")
+    @Operation(summary = "Get User Holidays for Current Month including public holidays and excluded holidays and leaves")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getUserHolidays2(
+            @CurrentUser UserDTO currentUser) {
+
+        int month = java.time.LocalDate.now().getMonthValue();
+        int year = java.time.LocalDate.now().getYear();
+        try {
+        List<HolidayDTO> holidays = userHolidayService.getUserHolidaysAndLeave(currentUser.getId(), month,year);
+        return ResponseEntity.ok(holidays);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("⚠️ " + e.getMessage());
+        }
+        catch (Exception e) {
+            return ResponseEntity.badRequest().body("⚠️ " + e.getMessage());
+        }
+    }
+
     @GetMapping("/currentMonth")
-    @Operation(summary = "Get User Holidays for Current Month including public holidays and excluded holidays")
+    @Operation(summary = "Get User Holidays for Current Month including public holidays and excluded holidays and leaves")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> getUserHolidays(
             @CurrentUser UserDTO currentUser) {
 
         int month = java.time.LocalDate.now().getMonthValue();
+        int year = java.time.LocalDate.now().getYear();
         try {
         List<HolidayDTO> holidays = userHolidayService.getUserHolidays(currentUser.getId(), month);
         return ResponseEntity.ok(holidays);
