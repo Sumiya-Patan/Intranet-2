@@ -46,16 +46,12 @@ public class ManagerWeeklySummaryService {
     @Value("${ums.api.base-url}")
     private String umsBaseUrl;
 
-    public List<ManagerWeeklySummaryDTO> getWeeklySubmittedTimesheetsByManager(Long managerId, String authHeader) {
+    public List<ManagerWeeklySummaryDTO> getWeeklySubmittedTimesheetsByManager(Long managerId, String authHeader,LocalDate startOfMonth,LocalDate endOfMonth) {
     HttpHeaders headers = new HttpHeaders();
     headers.set("Authorization", authHeader);
     HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-    // Step 0: Define current month's range
-    LocalDate now = LocalDate.now();
-    LocalDate startOfMonth = now.withDayOfMonth(1);
-    LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
-    // Step 1: Get all projects owned by this manager
+//     // Step 1: Get all projects owned by this manager
     String url = String.format("%s/projects/owner", pmsBaseUrl);
     ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
             url, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});

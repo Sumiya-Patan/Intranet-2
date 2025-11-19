@@ -1,5 +1,6 @@
 package com.intranet.controller.external;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,8 +37,12 @@ public class ManagerWeeklySummaryController {
             HttpServletRequest request) {
 
         String authHeader = request.getHeader("Authorization");
-        List<ManagerWeeklySummaryDTO> summary =
-                managerWeeklySummaryService.getWeeklySubmittedTimesheetsByManager(user.getId(), authHeader);
+        // Step 0: Define current month's range
+        LocalDate now = LocalDate.now();
+        LocalDate startOfMonth = now.withDayOfMonth(1);
+        LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+            List<ManagerWeeklySummaryDTO> summary =
+                managerWeeklySummaryService.getWeeklySubmittedTimesheetsByManager(user.getId(), authHeader, startOfMonth, endOfMonth);
 
         return ResponseEntity.ok(summary);
     }
