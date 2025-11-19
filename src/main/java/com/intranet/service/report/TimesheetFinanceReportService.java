@@ -649,7 +649,7 @@ public class TimesheetFinanceReportService {
                 Long userId, int month, int year, String authHeader) {
 
         // Fetch all leaves for the month using LMS cache
-        List<LeaveDTO> leaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
+        List<LeaveDTO> leaves = leaveDirectoryService.fetchLeavesUserId(userId,year, month, authHeader);
 
         BigDecimal totalLeaveHours = BigDecimal.ZERO;
         int totalLeaveDays = 0;

@@ -61,6 +61,41 @@ public class LeaveDirectoryService {
         }
     }
 
+    @Cacheable(value = "leaveCache", key = "'leaves__'+#year+'_'+#month")
+    public List<LeaveDTO> fetchLeavesUserId(Long userId,int year, int month, String authHeader) {
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", authHeader);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        String url = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d", lmsBaseUrl, userId,year, month);
+
+        try {
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> body = response.getBody();
+            if (body == null || !body.containsKey("data")) {
+                return Collections.emptyList();
+            }
+
+            List<Map<String, Object>> leaves = (List<Map<String, Object>>) body.get("data");
+
+            return leaves.stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            System.err.println("⚠ Failed to fetch leaves: " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
     private LeaveDTO convertToDto(Map<String, Object> row) {
 
         LeaveDTO dto = new LeaveDTO();
