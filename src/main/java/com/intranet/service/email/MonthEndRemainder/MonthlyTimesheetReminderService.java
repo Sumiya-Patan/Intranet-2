@@ -31,7 +31,7 @@ public class MonthlyTimesheetReminderService {
     /**
      * Runs every month on the 20th at 9 AM
         */
-    @Scheduled(cron = "0 0 9 20 * *", zone = "Asia/Kolkata")
+    @Scheduled(cron = "0 0 16 20 * *", zone = "Asia/Kolkata")
     public void sendMonthlyTimesheetReminder() {
 
         System.out.println("📅 Monthly Timesheet Reminder Cron Started");
