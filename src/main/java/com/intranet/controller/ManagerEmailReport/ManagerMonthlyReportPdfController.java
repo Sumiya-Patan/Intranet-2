@@ -2,7 +2,6 @@ package com.intranet.controller.ManagerEmailReport;
 
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +21,6 @@ public class ManagerMonthlyReportPdfController {
 
     private final ManagerMonthlyReportService managerMonthlyReportService;
     private final ManagerMonthlyReportPdfEmailService emailService;
-
-    @Value("${ums.api.base-url}")
-    private String umsBaseUrl;
 
     @GetMapping("/managerMonthlyPdf")
     @PreAuthorize("hasAuthority('APPROVE_TIMESHEET') or hasAuthority('VIEW_TIMESHEET')")
@@ -46,12 +42,7 @@ public class ManagerMonthlyReportPdfController {
 
             LocalDate startDate = LocalDate.of(selectedYear, selectedMonth, 1);
             LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
-            
-            // Manager email: reuse manager id => get from UMS if necessary; here assume currentUser has email
-            String managerEmail = "ajay.bhukya@pavestechnologies.com"; // for testing
-            if (managerEmail == null || managerEmail.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body("Manager email not available in token.");
-            }
+            String managerEmail = currentUser.getEmail();
             
             // Generate report data map
             java.util.Map<String, Object> report = managerMonthlyReportService.generateManagerMonthlyReport(
