@@ -15,6 +15,10 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ManagerPdfTemplateBuilder {
+    private String monthName(int monthNumber) {
+    String name = java.time.Month.of(monthNumber).name(); // "NOVEMBER"
+    return name.substring(0,1) + name.substring(1).toLowerCase(); // "November"
+    }
 
     public String buildManagerMonthlyReportHtml(Map<String, Object> report, String managerName) {
 
@@ -84,8 +88,11 @@ public class ManagerPdfTemplateBuilder {
 
         // Header
         html.append("<h1>Manager Monthly Report</h1>");
-        html.append("<p class=\"muted\">Period: <strong>")
-            .append(esc(startDateStr)).append("</strong> to <strong>").append(esc(endDateStr)).append("</strong></p>");
+        String period = monthName(Integer.parseInt(monthStr)) + " " + yearStr;
+
+        html.append("<p class=\"muted\"><strong>")
+            .append(esc(period))
+            .append("</strong></p>");
 
         html.append("<p class=\"muted\">Manager: <strong>").append(esc(managerName)).append("</strong></p>");
 
@@ -104,6 +111,39 @@ public class ManagerPdfTemplateBuilder {
 
         html.append("</table>");
         html.append("</div>");
+
+        // ---------------------------
+        // Missing Timesheets
+        // ---------------------------
+        html.append("<div class=\"section no-break\">");
+        html.append("<h2>Missing Timesheets (Last 15 Days)</h2>");
+
+        List<?> missingList = safeCastList(get(report, "missingTimesheets"));
+
+        if (missingList == null || missingList.isEmpty()) {
+            html.append("<p class=\"muted\">All users submitted their timesheets ✔</p>");
+        } else {
+
+            html.append("<table>");
+            html.append("<tr><th>User</th><th>User ID</th><th>Email</th></tr>");
+
+            for (Object m : missingList) {
+                String name = safeGetAsString(m, "fullName");
+                String uid  = safeGetAsString(m, "userId");
+                String mail = safeGetAsString(m, "email");
+
+                html.append("<tr>")
+                    .append("<td>").append(esc(name)).append("</td>")
+                    .append("<td>").append(esc(uid)).append("</td>")
+                    .append("<td>").append(esc(mail)).append("</td>")
+                    .append("</tr>");
+            }
+
+            html.append("</table>");
+        }
+
+        html.append("</div>");
+
 
         // Weekly Summary
         html.append("<div class=\"section no-break\">");
@@ -138,6 +178,8 @@ public class ManagerPdfTemplateBuilder {
         }
         html.append("</div>");
 
+
+
         // Project Breakdown
         html.append("<div class=\"section no-break\">");
         html.append("<h2>Project Breakdown</h2>");
@@ -159,6 +201,77 @@ public class ManagerPdfTemplateBuilder {
             html.append("</table>");
         }
         html.append("</div>");
+
+        // ----------------------------------
+        // Project Breakdown (Grouped)
+        // ----------------------------------
+        html.append("<div class=\"section no-break\">");
+        html.append("<h2>Project Breakdown (With Member Contributions)</h2>");
+
+        if (projectBreakdown == null || projectBreakdown.isEmpty()) {
+
+            html.append("<p class=\"muted\">No project data found.</p>");
+
+        } else {
+
+            for (Object pObj : projectBreakdown) {
+
+                String pName = safeGetAsString(pObj, "projectName");
+                String totalH = safeGetAsString(pObj, "totalHours");
+                String billH  = safeGetAsString(pObj, "billableHours");
+                String nonH   = safeGetAsString(pObj, "nonBillableHours");
+                String billPct= safeGetAsString(pObj, "billablePercentage");
+
+                // Project Header
+                html.append("<h3 style=\"margin-bottom:4px;\">")
+                        .append(esc(pName))
+                        .append("</h3>");
+
+                // Primary project summary table
+                html.append("<table class=\"no-break\">");
+                html.append("<tr><th>Total Hours</th><td>").append(esc(totalH)).append("</td></tr>");
+                html.append("<tr><th>Billable Hours</th><td>").append(esc(billH)).append("</td></tr>");
+                html.append("<tr><th>Non-Billable Hours</th><td>").append(esc(nonH)).append("</td></tr>");
+                html.append("<tr><th>Billable %</th><td>").append(esc(billPct)).append("</td></tr>");
+                html.append("</table>");
+
+                // Members Section
+                List<?> members = safeCastList(safeGet(pObj, "membersContribution"));
+
+                html.append("<p style=\"margin-top:10px;\"><strong>Member Contributions</strong></p>");
+
+                if (members == null || members.isEmpty()) {
+
+                    html.append("<p class=\"muted\">No members assigned</p>");
+
+                } else {
+
+                    html.append("<table class=\"no-break\">");
+                    html.append("<tr>")
+                            .append("<th>Member</th>")
+                            .append("<th>User ID</th>")
+                            .append("<th>Hours</th>")
+                            .append("<th>Contribution %</th>")
+                            .append("</tr>");
+
+                    for (Object m : members) {
+                        html.append("<tr>")
+                                .append("<td>").append(esc(safeGetAsString(m, "userName"))).append("</td>")
+                                .append("<td>").append(esc(safeGetAsString(m, "userId"))).append("</td>")
+                                .append("<td>").append(esc(safeGetAsString(m, "totalHours"))).append("</td>")
+                                .append("<td>").append(esc(safeGetAsString(m, "contribution"))).append("</td>")
+                                .append("</tr>");
+                    }
+
+                    html.append("</table>");
+                }
+
+                html.append("<hr/>");
+            }
+        }
+
+        html.append("</div>");
+
 
         // User Contribution: Billable, Non-billable, Auto-generated
         html.append("<div class=\"section no-break\">");
