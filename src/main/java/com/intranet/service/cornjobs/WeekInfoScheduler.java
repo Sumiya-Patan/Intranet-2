@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import com.intranet.service.WeekInfoService;
@@ -32,7 +33,7 @@ public class WeekInfoScheduler {
         log.info("🕒 Starting WeekInfo generation job for last 6 months...");
 
         // Loop through last 6 months including current
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 32; i++) {
 
             LocalDate targetMonth = now.minusMonths(i);
 
@@ -49,5 +50,31 @@ public class WeekInfoScheduler {
         }
 
         log.info("✅ Completed WeekInfo generation for last 6 months.");
+    }
+
+
+
+    @Scheduled(cron = "0 0 1 28 * *")
+    public void generateWeeksForNextMonth() {
+
+        LocalDate now = LocalDate.now();
+
+        log.info("🕒 Starting WeekInfo generation next months...");
+
+            LocalDate targetMonth = now.plusMonths(1);
+
+            int year = targetMonth.getYear();
+            int month = targetMonth.getMonthValue();
+
+            log.info("📅 Generating WeekInfo for {}/{}", month, year);
+
+            try {
+                weekInfoService.generateWeeksForMonth(year, month);
+            } catch (Exception e) {
+                log.error("❌ Error generating WeekInfo for {}/{}: {}", month, year, e.getMessage());
+            }
+        
+
+        log.info("✅ Completed WeekInfo generation for next month.");
     }
 }
