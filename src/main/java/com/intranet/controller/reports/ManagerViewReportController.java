@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +15,7 @@ import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.report.ManagerMonthlyReportService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
@@ -26,6 +28,8 @@ public class ManagerViewReportController {
     private final ManagerMonthlyReportService managerMonthlyReportService;
 
     @GetMapping("/managerMonthly")
+    @Operation(summary = "Get manager monthly report", description = "Retrieve a detailed monthly report for managers.")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> managerMonthlyReport(
             @CurrentUser UserDTO currentUser,
             @RequestParam(required = false) Integer month,

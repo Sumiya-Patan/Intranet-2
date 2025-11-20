@@ -4,9 +4,12 @@ import com.intranet.dto.MonthlyUserReportDTO;
 import com.intranet.dto.UserDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.MonthlyUserReportService;
+
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -17,6 +20,8 @@ public class MonthlyUserReportController {
     private final MonthlyUserReportService reportService;
 
     @GetMapping("/user_monthly")
+    @Operation(summary = "Get monthly report for the current user", description = "Retrieve a detailed monthly report for the authenticated user.")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> getMonthlyReport(
             @CurrentUser UserDTO currentUser,
             @RequestParam(required = false) int month,

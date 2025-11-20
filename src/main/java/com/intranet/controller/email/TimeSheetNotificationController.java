@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,6 +33,7 @@ public class TimeSheetNotificationController {
      */
     @Operation(summary = "Send timesheet summary/status emails to users when timesheet is approved or rejected by the manager.")
     @PostMapping("/response")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> sendTimeSheetSummaryEmails(
             @RequestBody List<TimeSheetSummaryEmailDTO> summaries
     ) {
@@ -66,6 +68,7 @@ public class TimeSheetNotificationController {
      */
     @PostMapping("/notify")
     @Operation(summary = "Send weekly submission emails to managers.")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET') or hasAuthority('EDIT_TIMESHEET')")
     public ResponseEntity<?> sendWeeklySubmissionEmails(@RequestBody List<WeeklySubmissionEmailDTO> submissions) {
         if (submissions == null || submissions.isEmpty()) {
             return ResponseEntity.badRequest().body("❌ No submissions provided.");

@@ -8,6 +8,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -21,6 +22,7 @@ import com.intranet.service.MonthReportEmailSend.EmailPdfSenderService;
 import com.intranet.service.MonthReportEmailSend.PdfGeneratorService;
 import com.intranet.service.MonthReportEmailSend.PdfTemplateBuilder;
 
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
@@ -59,6 +61,8 @@ public class MonthlyReportPdfController {
     }
 
     @GetMapping("/userMonthlyPdf")
+    @Operation(summary = "Generate Monthly Report PDF for the current user and send via email")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> generatePdf(
         @CurrentUser UserDTO currentUser,
         @RequestParam int month,
