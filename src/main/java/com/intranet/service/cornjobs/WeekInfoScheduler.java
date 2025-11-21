@@ -54,7 +54,7 @@ public class WeekInfoScheduler {
 
 
 
-    @Scheduled(cron = "0 0 1 28 * *")
+    @Scheduled(cron = "0 0 1 28,27,26 * *")
     public void generateWeeksForNextMonth() {
 
         LocalDate now = LocalDate.now();
