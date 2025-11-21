@@ -1,5 +1,7 @@
 package com.intranet.controller.MonthReportSendEmail;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +26,7 @@ public class MonthlyReportPdfController {
     private final EmailPdfSenderService emailSender;
     private final MonthlyUserReportService reportService;
 
-    @GetMapping("/userMonthlyPdf")
+    @GetMapping("/userMonthlyPdf2")
     @Operation(summary = "Generate Monthly Report PDF for the current user and send via email")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> generatePdf(
@@ -58,5 +60,38 @@ public class MonthlyReportPdfController {
         return ResponseEntity.badRequest().body("Error: " + e.getMessage());
     }
     }
+   @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    @GetMapping(
+        value = "/downloadMonthlyPdf",
+        produces = MediaType.APPLICATION_PDF_VALUE
+    )
+    public ResponseEntity<byte[]> downloadMonthlyPdf(
+        @CurrentUser UserDTO currentUser,
+        @RequestParam int month,
+        @RequestParam int year) {
+
+    try {
+
+        MonthlyUserReportDTO reportDTO =
+                reportService.getMonthlyUserReport(currentUser.getId(), month, year);
+
+        String monthName = java.time.Month.of(month)
+                .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+
+        String html = templateBuilder.buildUserMonthlyReportHtml(reportDTO, monthName, year);
+        byte[] pdfBytes = pdfGenerator.generatePdfFromHtml(html);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Monthly_Report.pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdfBytes);
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return ResponseEntity.badRequest().body(null);
+    }
+    }
+
+
 
 }   
