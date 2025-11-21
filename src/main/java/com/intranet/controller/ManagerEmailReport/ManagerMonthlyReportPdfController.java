@@ -11,6 +11,8 @@ import com.intranet.service.ManagerEmailReport.ManagerMonthlyReportPdfEmailServi
 import com.intranet.service.ManagerEmailReport.ManagerReportDtoAdapter;
 import com.intranet.service.report.ManagerMonthlyReportService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import java.time.LocalDate;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -24,6 +26,7 @@ public class ManagerMonthlyReportPdfController {
 
     @GetMapping("/managerMonthlyPdf")
     @PreAuthorize("hasAuthority('APPROVE_TIMESHEET') or hasAuthority('VIEW_TIMESHEET')")
+    @Operation(summary = "Generate and email manager monthly report PDF", description = "Generates a PDF report for the manager's monthly timesheet and emails it to them.")
     public ResponseEntity<?> generateManagerReport(
             @CurrentUser UserDTO currentUser,
             @RequestParam(required = false) Integer month,
