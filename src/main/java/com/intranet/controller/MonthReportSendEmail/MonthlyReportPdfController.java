@@ -26,7 +26,7 @@ public class MonthlyReportPdfController {
     private final EmailPdfSenderService emailSender;
     private final MonthlyUserReportService reportService;
 
-    @GetMapping("/userMonthlyPdf2")
+    @GetMapping("/userMonthlyPdf")
     @Operation(summary = "Generate Monthly Report PDF for the current user and send via email")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
     public ResponseEntity<?> generatePdf(
