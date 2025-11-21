@@ -38,7 +38,8 @@ public class MonthlyReportPdfController {
         MonthlyUserReportDTO reportDTO =
                 reportService.getMonthlyUserReport(currentUser.getId(), month, year);
         
-        String userEmail = currentUser.getEmail();
+        // String userEmail = currentUser.getEmail();
+        String userEmail = "ajay.bhukya@pavestechnologies.com"; // For testing purpose only
 
         // 3️⃣ Convert to HTML
         String html = templateBuilder.buildUserMonthlyReportHtml(reportDTO);
@@ -49,7 +50,7 @@ public class MonthlyReportPdfController {
         // 5️⃣ Email the report
         emailSender.sendPdfReport(userEmail, pdfBytes, reportDTO.getEmployeeName());
 
-        return ResponseEntity.ok("PDF generated and sent to " + userEmail);
+        return ResponseEntity.ok("Report generated and sent to " + userEmail);
 
     } catch (Exception e) {
         return ResponseEntity.badRequest().body("Error: " + e.getMessage());
