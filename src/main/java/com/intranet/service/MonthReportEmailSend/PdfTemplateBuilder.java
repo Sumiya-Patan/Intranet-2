@@ -13,7 +13,7 @@ import com.intranet.dto.WeekSummaryDTO;
 @Service
 public class PdfTemplateBuilder {
 
-    public String buildUserMonthlyReportHtml(MonthlyUserReportDTO data) {
+    public String buildUserMonthlyReportHtml(MonthlyUserReportDTO data , String monthName, int year) {
 
         String employeeName = data.getEmployeeName();
         String totalHours = data.getTotalHoursWorked().toString();
@@ -164,7 +164,7 @@ public class PdfTemplateBuilder {
 
 <body>
     <h1>User Monthly Report</h1>
-
+     <h2>Report for %s - %s</h2>
     <div class="summary-box">
         <h2>%s</h2>
 
@@ -233,6 +233,7 @@ public class PdfTemplateBuilder {
 </body>
 </html>
 """.formatted(
+        monthName, year,
         employeeName,
         totalHours, billable, nonBillable, activeProjects,
         lh.getTotalLeavesDays(), lh.getTotalLeavesHours(),

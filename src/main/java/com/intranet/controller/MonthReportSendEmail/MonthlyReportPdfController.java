@@ -37,12 +37,14 @@ public class MonthlyReportPdfController {
         // 1️⃣ Fetch report
         MonthlyUserReportDTO reportDTO =
                 reportService.getMonthlyUserReport(currentUser.getId(), month, year);
-        
-        // String userEmail = currentUser.getEmail();
-        String userEmail = "ajay.bhukya@pavestechnologies.com"; // For testing purpose only
+    
+        String monthName = java.time.Month.of(month)
+        .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH);
+
+        String userEmail = currentUser.getEmail();
 
         // 3️⃣ Convert to HTML
-        String html = templateBuilder.buildUserMonthlyReportHtml(reportDTO);
+        String html = templateBuilder.buildUserMonthlyReportHtml(reportDTO, monthName, year);
 
         // 4️⃣ Convert to PDF
         byte[] pdfBytes = pdfGenerator.generatePdfFromHtml(html);
