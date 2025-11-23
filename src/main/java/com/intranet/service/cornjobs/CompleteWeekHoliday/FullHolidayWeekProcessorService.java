@@ -11,9 +11,11 @@ import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
 import com.intranet.service.email.ums_corn_job_token.UmsAuthService;
+import com.intranet.util.EmailUtil;
 import com.intranet.util.cache.LeaveDirectoryService;
 import com.intranet.util.cache.UserDirectoryService;
 
+import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -43,11 +45,16 @@ public class FullHolidayWeekProcessorService {
     private final TimeSheetRepo timeSheetRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
 
+    private final EmailUtil emailUtil;
+
     private final RestTemplate restTemplate = new RestTemplate();
 
 
     @Value("${lms.api.base-url}")
     private String lmsBaseUrl;
+
+    @Value("${timesheet.user}")
+    private String timesheetUser;
 
     @Transactional
     public void processMonth() {
@@ -56,6 +63,8 @@ public class FullHolidayWeekProcessorService {
         LocalDate previousMonth = currentMonth.minusMonths(1);
         int month = previousMonth.getMonthValue();
         int year = previousMonth.getYear();
+
+        try{
 
         String token = umsAuthService.getUmsToken();
         String authHeader = "Bearer " + token;
@@ -120,6 +129,15 @@ public class FullHolidayWeekProcessorService {
                 autoGenerateTimesheets(userId, week, weekDates);
                 createWeeklyReview(userId, week);
             }
+        }
+        } catch (Exception e) {
+            System.err.println("⚠ Error in FullHolidayWeekProcessorService: " + e.getMessage());
+            try {
+                emailUtil.sendEmail(timesheetUser,"⚠ Error in FullHolidayWeekProcessorService", e.getMessage());
+            } catch (MessagingException e1) {
+                System.err.println("⚠ Failed to send error email: " + e1.getMessage());
+            }
+
         }
     }
 

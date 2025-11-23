@@ -29,7 +29,7 @@ public class EmailUtil {
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(htmlContent, true); // HTML enabled
-
+        
         mailSender.send(message);
     }
 }
