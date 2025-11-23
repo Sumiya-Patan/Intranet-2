@@ -299,11 +299,11 @@ public class WeeklyTimeSheetReviewService {
     // 3️⃣ RULE: REJECTED → FIX ONLY REJECTED REVIEWS + TS → SUBMITTED
     if (ts.getStatus() == TimeSheet.Status.REJECTED) {
 
-        List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_Id(ts.getId());
+        List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_IdAndStatus(ts.getId(), TimeSheetReview.Status.REJECTED);
 
         for (TimeSheetReview r : reviews) {
 
-            if( r.getStatus() == TimeSheetReview.Status.REJECTED) {
+            if (r.getStatus() == TimeSheetReview.Status.REJECTED) {
                 r.setStatus(TimeSheetReview.Status.SUBMITTED);
                 r.setReviewedAt(LocalDateTime.now());
             }
@@ -322,16 +322,16 @@ public class WeeklyTimeSheetReviewService {
     // Save all timesheets at the end
     timeSheetRepo.saveAll(timeSheets);
 
-    // ✅ Step 11: Update TimeSheetReview records → SUBMITTED
-    List<TimeSheetReview> existingReviews = timeSheetReviewRepo.findByTimeSheet_IdIn(timeSheetIds);
-    if (existingReviews != null && !existingReviews.isEmpty()) {
-        existingReviews.forEach(r -> {
-            r.setStatus(TimeSheetReview.Status.SUBMITTED);
-            r.setReviewedAt(LocalDateTime.now());
-        });
-        timeSheetReviewRepo.saveAll(existingReviews);
-    }
-
+    // // ✅ Step 11: Update TimeSheetReview records → SUBMITTED
+    // List<TimeSheetReview> existingReviews = timeSheetReviewRepo.findByTimeSheet_IdIn(timeSheetIds);
+    // if (existingReviews != null && !existingReviews.isEmpty()) {
+    //     existingReviews.forEach(r -> {
+    //         r.setStatus(TimeSheetReview.Status.SUBMITTED);
+    //         r.setReviewedAt(LocalDateTime.now());
+    //     });
+    //     timeSheetReviewRepo.saveAll(existingReviews);
+    // }
+    
     // ✅ Step 12: Notify managers via email
     boolean result = notifyManagersOnWeeklySubmission(userId, commonWeek, totalWorked, timeSheets);
 
