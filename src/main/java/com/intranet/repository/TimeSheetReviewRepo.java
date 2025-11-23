@@ -32,5 +32,4 @@ public interface TimeSheetReviewRepo  extends JpaRepository<TimeSheetReview, Lon
 
     List<TimeSheetReview> findByTimeSheet_IdAndStatus(Long timeSheetId, TimeSheetReview.Status status);
 
-
 }

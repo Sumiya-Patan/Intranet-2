@@ -299,14 +299,14 @@ public class WeeklyTimeSheetReviewService {
     // 3️⃣ RULE: REJECTED → FIX ONLY REJECTED REVIEWS + TS → SUBMITTED
     if (ts.getStatus() == TimeSheet.Status.REJECTED) {
 
-        List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_IdAndStatus(ts.getId(), TimeSheetReview.Status.REJECTED);
+        List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_Id(ts.getId());
 
         for (TimeSheetReview r : reviews) {
 
-            if (r.getStatus() == TimeSheetReview.Status.REJECTED) {
+            // if (r.getStatus() == TimeSheetReview.Status.REJECTED) {
                 r.setStatus(TimeSheetReview.Status.SUBMITTED);
                 r.setReviewedAt(LocalDateTime.now());
-            }
+            // }
 
             // DO NOT touch APPROVED, SUBMITTED, or PENDING reviews
         }
