@@ -249,7 +249,7 @@ public class WeeklyTimeSheetReviewService {
             default:
                 newSheet.setHoursWorked(BigDecimal.valueOf(8)); // Mon–Fri → 8 hrs
         }
-            newSheet.setStatus(TimeSheet.Status.SUBMITTED);
+            newSheet.setStatus(TimeSheet.Status.APPROVED);
             newSheet.setEntries(Collections.emptyList());
             newSheet.setCreatedAt(LocalDateTime.now());
             newSheet.setUpdatedAt(LocalDateTime.now());
@@ -275,11 +275,51 @@ public class WeeklyTimeSheetReviewService {
     review.setReviewedAt(LocalDateTime.now());
     weeklyReviewRepo.save(review);
 
-    // ✅ Step 10: Update all timesheets to SUBMITTED
-    timeSheets.forEach(ts -> {
+   
+   // --------------------------------------------------------------
+// FINAL REVIEW UPDATE LOGIC BASED ON YOUR RULES
+// --------------------------------------------------------------
+
+    for (TimeSheet ts : timeSheets) {
+
+    // 1️⃣ RULE: DRAFT → SUBMITTED (no review updates)
+    if (ts.getStatus() == TimeSheet.Status.DRAFT) {
         ts.setStatus(TimeSheet.Status.SUBMITTED);
         ts.setUpdatedAt(LocalDateTime.now());
-    });
+        continue; // no review changes
+    }
+
+    // 2️⃣ RULE: APPROVED, PARTIALLY_APPROVED, SUBMITTED → KEEP AS IS
+    if (ts.getStatus() == TimeSheet.Status.APPROVED ||
+        ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED ||
+        ts.getStatus() == TimeSheet.Status.SUBMITTED) {
+        continue; // do nothing
+    }
+
+    // 3️⃣ RULE: REJECTED → FIX ONLY REJECTED REVIEWS + TS → SUBMITTED
+    if (ts.getStatus() == TimeSheet.Status.REJECTED) {
+
+        List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_Id(ts.getId());
+
+        for (TimeSheetReview r : reviews) {
+
+            if( r.getStatus() == TimeSheetReview.Status.REJECTED) {
+                r.setStatus(TimeSheetReview.Status.SUBMITTED);
+                r.setReviewedAt(LocalDateTime.now());
+            }
+
+            // DO NOT touch APPROVED, SUBMITTED, or PENDING reviews
+        }
+
+        // Save only changed reviews
+        timeSheetReviewRepo.saveAll(reviews);
+
+        // Update timesheet
+        ts.setStatus(TimeSheet.Status.SUBMITTED);
+        ts.setUpdatedAt(LocalDateTime.now());
+    }
+    }
+    // Save all timesheets at the end
     timeSheetRepo.saveAll(timeSheets);
 
     // ✅ Step 11: Update TimeSheetReview records → SUBMITTED
