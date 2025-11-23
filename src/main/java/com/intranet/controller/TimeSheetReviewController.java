@@ -30,4 +30,18 @@ public class TimeSheetReviewController {
                 java.util.Map.of("message", message, "status", dto.getStatus())
         );
     }
+
+
+    @PostMapping("/review/internal")
+    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET')")
+    @Operation(summary = "Approve or reject multiple timesheets for a user by manager internal")
+    public ResponseEntity<?> reviewMultipleTimesheetsInternal(
+            @CurrentUser UserDTO manager,
+            @RequestBody TimeSheetBulkReviewRequestDTO dto) {
+
+        String message = reviewService.reviewInternalTimesheets(manager.getId(), dto);
+        return ResponseEntity.ok().body(
+                java.util.Map.of("message", message, "status", dto.getStatus())
+        );
+    }
 }

@@ -9,7 +9,9 @@ import lombok.Data;
 public class TimeSheetEntrySummaryDTO {
     private Long timesheetEntryid;
     private Long projectId;
+    private String projectName;
     private Long taskId;
+    private String taskName;
     private String description;
     private String workLocation;
     private LocalDateTime fromTime; // optional: formatted as HH:mm

@@ -1,9 +1,11 @@
 package com.intranet.service;
 
 import com.intranet.dto.*;
+import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
+import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetOnHolidaysRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
@@ -43,6 +45,7 @@ public class WeeklySummaryService {
 
     private final TimeSheetRepo timeSheetRepo;
     private final WeekInfoRepo weekInfoRepo;
+    private final InternalProjectRepo internalProjectRepo;
 
     private HttpEntity<Void> buildEntityWithAuth() {
     ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -63,8 +66,9 @@ public class WeeklySummaryService {
 
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
-    // @Value("${ums.api.base-url}")
-    // private String umsBaseUrl;
+    @Value("${ums.api.base-url}")
+    private String umsBaseUrl;
+
      private final RestTemplate restTemplate = new RestTemplate();
 
     private final TimeSheetOnHolidaysRepo timeSheetOnHolidaysRepository;
@@ -123,12 +127,54 @@ public class WeeklySummaryService {
                 .filter(ts -> ts.getWeekInfo().getId().equals(week.getId()))
                 .collect(Collectors.toList());
 
-
+        Map<Long, List<InternalProject>> internalProjectMap =
+                internalProjectRepo.findAll().stream()
+                        .collect(Collectors.groupingBy(
+                                ip -> ip.getProjectId().longValue()
+                        ));
         
         List<TimeSheetSummaryDTO> sheetDTOs = new ArrayList<>();
 
         for (TimeSheet ts : weekSheets) {
             List<ActionStatusDTO> actionStatusList = new ArrayList<>();
+
+            boolean isInternal = ts.getEntries().stream()
+        .allMatch(e -> internalProjectMap.containsKey(e.getProjectId()));
+
+
+        if (isInternal) {
+            // ------------------------------------------
+            // INTERNAL PROJECT LOGIC
+            // ------------------------------------------
+
+            // 1. Check if review exists
+            Optional<TimeSheetReview> reviewOpt =
+                    ts.getReviews().stream().findFirst();
+
+            if (!reviewOpt.isPresent()) {
+                // CASE A — No review → show default admin pending
+                actionStatusList.add(new ActionStatusDTO(
+                        9999L,
+                        "Timesheet Admin",
+                        "Pending"
+                ));
+            } else {
+
+                TimeSheetReview review = reviewOpt.get();
+
+                String status = review.getStatus().name();
+                if(status.equals("SUBMITTED"))
+                    status = "Pending";
+
+                // CASE C — Reviewed
+                actionStatusList.add(new ActionStatusDTO(
+                        review.getManagerId(),
+                        fetchUserFullName(review.getManagerId()),
+                        status
+                ));
+            }
+
+        } else {
 
             ts.getEntries().forEach(entry -> {
                 Map<String, Object> project = projectMap.get(entry.getProjectId());
@@ -161,7 +207,10 @@ public class WeeklySummaryService {
                 if (!exists) {
                     actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
                 }
-            });
+            }
+        
+            );
+        }
 
             // ✅ Determine overall status
             String overallStatus;
@@ -311,6 +360,37 @@ public class WeeklySummaryService {
         summary.setUserId(userId);
         summary.setWeeklySummary(weeklySummaries);
         return summary;
+    }
+
+    private String fetchUserFullName(Long userId) {
+
+    try {
+        String url = umsBaseUrl + "/admin/users/" + userId;
+
+
+          // ✔ Use your existing method
+        HttpEntity<Void> entity = buildEntityWithAuth();
+
+        ResponseEntity<Map<String, Object>> response =
+                restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        entity,
+                        new ParameterizedTypeReference<>() {}
+                );
+
+        Map<String, Object> body = response.getBody();
+        if (body == null) return "Unknown User";
+
+        String first = (String) body.getOrDefault("first_name", "");
+        String last  = (String) body.getOrDefault("last_name", "");
+
+        String fullName = (first + " " + last).trim();
+        return fullName.isEmpty() ? "Unknown User" : fullName;
+
+    } catch (Exception e) {
+        return "Unknown User";
+    }
     }
 
 }

@@ -40,5 +40,8 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
 
      boolean existsByUserIdAndWorkDate(Long userId, LocalDate date);
 
-
+      // Fetch all timesheets except DRAFT
+    @Query("SELECT t FROM TimeSheet t WHERE t.status <> com.intranet.entity.TimeSheet.Status.DRAFT")
+    List<TimeSheet> findAllNonDraft();
+    
 }

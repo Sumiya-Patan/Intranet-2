@@ -1,10 +1,12 @@
 package com.intranet.service;
 
 import com.intranet.dto.TimeSheetBulkReviewRequestDTO;
+import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
+import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.repository.WeekInfoRepo;
@@ -45,6 +47,7 @@ public class TimeSheetReviewService {
     // ✅ Add this line
     private final TimeSheetNotificationService timeSheetNotificationService;
     private final UserDirectoryService userDirectoryService;
+    private final InternalProjectRepo internalProjectRepo;
 
 
     @Value("${pms.api.base-url}")
@@ -367,5 +370,91 @@ public class TimeSheetReviewService {
             return false;
         }
         return false;
+    }
+
+     @Transactional
+    public String reviewInternalTimesheets(Long managerId, TimeSheetBulkReviewRequestDTO dto) {
+
+        List<TimeSheet> sheets = timeSheetRepo.findAllById(dto.getTimesheetIds());
+
+        if (sheets.isEmpty())
+            throw new IllegalArgumentException("No timesheets found.");
+
+        // All must belong to same user & week
+        Long userId = dto.getUserId();
+        WeekInfo weekInfo = sheets.get(0).getWeekInfo();
+
+        boolean allSameWeek = sheets.stream()
+                .allMatch(ts -> ts.getWeekInfo().getId().equals(weekInfo.getId()));
+
+        if (!allSameWeek)
+            throw new IllegalArgumentException("Select only one week at a time.");
+
+        // Validate status
+        if (!dto.getStatus().equalsIgnoreCase("APPROVED")
+                && !dto.getStatus().equalsIgnoreCase("REJECTED"))
+            throw new IllegalArgumentException("Status must be APPROVED or REJECTED.");
+
+        if (dto.getStatus().equalsIgnoreCase("REJECTED")
+                && (dto.getComments() == null || dto.getComments().isBlank()))
+            throw new IllegalArgumentException("Comments required when rejecting.");
+
+        // Cannot approve old weeks (> 30 days)
+        if (weekInfo.getEndDate().isBefore(LocalDate.now().minusDays(30))) {
+            throw new IllegalArgumentException("Cannot review timesheets older than 30 days.");
+        }
+
+        Map<Long, List<InternalProject>> internalMap =
+        internalProjectRepo.findAll().stream()
+                .collect(Collectors.groupingBy(
+                        ip -> ip.getProjectId().longValue()
+                ));
+
+        for (TimeSheet ts : sheets) {
+            boolean internalOnly = ts.getEntries().stream()
+                    .allMatch(e -> internalMap.containsKey(e.getProjectId()));
+
+            if (!internalOnly)
+                throw new IllegalArgumentException(
+                        "Cannot review external project timesheets here."
+                );
+        }
+
+
+        // --------------------------------------------------------
+        // CREATE / UPDATE REVIEWS
+        // --------------------------------------------------------
+        for (TimeSheet ts : sheets) {
+
+            TimeSheetReview review = reviewRepo
+                    .findByTimeSheet_IdAndManagerId(ts.getId(), managerId)
+                    .orElseGet(TimeSheetReview::new);
+
+            review.setUserId(userId);
+            review.setManagerId(managerId);
+            review.setTimeSheet(ts);
+            review.setWeekInfo(weekInfo);
+            review.setComments(dto.getComments());
+            review.setStatus(TimeSheetReview.Status.valueOf(dto.getStatus().toUpperCase()));
+            review.setReviewedAt(LocalDateTime.now());
+            reviewRepo.save(review);
+
+            // Internal project has only one manager → direct status
+            ts.setStatus(TimeSheet.Status.valueOf(dto.getStatus().toUpperCase()));
+            ts.setUpdatedAt(LocalDateTime.now());
+            timeSheetRepo.save(ts);
+        }
+
+        // --------------------------------------------------------
+        // Update weekly status
+        // --------------------------------------------------------
+        updateWeeklyTimeSheetReview(userId, weekInfo.getId());
+
+        // --------------------------------------------------------
+        // Send email summary
+        // --------------------------------------------------------
+        sendReviewNotificationEmails(managerId, dto, sheets);
+
+        return dto.getStatus() + " " + sheets.size() + " internal timesheets.";
     }
 }
