@@ -38,5 +38,7 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
 
      List<TimeSheet> findByUserIdInAndWorkDateBetween(Set<Long> memberIds, LocalDate startDate, LocalDate endDate);
 
+     boolean existsByUserIdAndWorkDate(Long userId, LocalDate date);
+
 
 }

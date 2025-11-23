@@ -33,7 +33,7 @@ public class WeekInfoScheduler {
         log.info("🕒 Starting WeekInfo generation job for last 6 months...");
 
         // Loop through last 6 months including current
-        for (int i = 0; i < 32; i++) {
+        for (int i = 0; i < 36; i++) {
 
             LocalDate targetMonth = now.minusMonths(i);
 

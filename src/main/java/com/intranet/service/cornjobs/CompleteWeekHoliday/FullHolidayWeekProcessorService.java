@@ -1,20 +1,29 @@
 package com.intranet.service.cornjobs.CompleteWeekHoliday;
 
 import com.intranet.dto.HolidayDTO;
+import com.intranet.dto.lms.LeaveDTO;
+import com.intranet.entity.HolidayExcludeUsers;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
+import com.intranet.repository.HolidayExcludeUsersRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
-import com.intranet.service.HolidayExcludeUsersService;
 import com.intranet.service.email.ums_corn_job_token.UmsAuthService;
+import com.intranet.util.cache.LeaveDirectoryService;
 import com.intranet.util.cache.UserDirectoryService;
 
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.*;
@@ -28,122 +37,316 @@ public class FullHolidayWeekProcessorService {
     private final UserDirectoryService userDirectoryService;
     private final UmsAuthService umsAuthService;
     private final WeekInfoRepo weekInfoRepo;
-    private final HolidayExcludeUsersService holidayExcludeUsersService;
+    private final HolidayExcludeUsersRepo holidayExcludeUsersRepo;
+    private final LeaveDirectoryService leaveDirectoryService;
 
     private final TimeSheetRepo timeSheetRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
 
+    private final RestTemplate restTemplate = new RestTemplate();
+
+
+    @Value("${lms.api.base-url}")
+    private String lmsBaseUrl;
+
     @Transactional
-    public void processPreviousMonth() {
+    public void processMonth() {
 
-        LocalDate now = LocalDate.now();
-        LocalDate prevMonthDate = now.minusMonths(1);
-        int month = prevMonthDate.getMonthValue();
-        int year = prevMonthDate.getYear();
+        LocalDate currentMonth = LocalDate.now();
+        LocalDate previousMonth = currentMonth.minusMonths(1);
+        int month = previousMonth.getMonthValue();
+        int year = previousMonth.getYear();
 
-        System.out.println("🔍 Processing previous month: " + month + "-" + year);
+        String token = umsAuthService.getUmsToken();
+        String authHeader = "Bearer " + token;
 
-        // STEP 1 → Fetch UMS token
-        String umsToken = umsAuthService.getUmsToken();
-        String authHeader = "Bearer " + umsToken;
+        // -------------------------------
+        // 1️⃣ Fetch ALL USERS from UMS
+        // -------------------------------
+        Map<Long, Map<String, Object>> users = userDirectoryService.fetchAllUsers(authHeader);
 
-        // STEP 2 → Fetch all users from UMS
-        Map<Long, Map<String, Object>> allUsers =
-                userDirectoryService.fetchAllUsers(authHeader);
+        if (users.isEmpty()) {
+            System.err.println("⚠ No users from UMS → EXITING CRON");
+            return;
+        }
 
-        System.out.println("👥 Total Users Found: " + allUsers.size());
+        // -------------------------------
+        // 2️⃣ Fetch LMS Holidays (ONCE)
+        // -------------------------------
+        List<HolidayDTO> lmsHolidays = fetchLmsHolidays(month, year, authHeader);
 
-        // STEP 3 → Fetch all weeks for this month
+        // -------------------------------
+        // 3️⃣ Generate Weekend Holidays (ONCE)
+        // -------------------------------
+        List<HolidayDTO> weekendHolidays = generateWeekendHolidays(month, year);
+
+        // -------------------------------
+        // 4️⃣ Fetch ALL LEAVES of all employees (ONCE)
+        // -------------------------------
+        List<LeaveDTO> allLeaves = leaveDirectoryService.fetchLeaves(year, month, authHeader);
+
+        // -------------------------------
+        // 5️⃣ Fetch ALL WEEKS OF MONTH
+        // -------------------------------
         List<WeekInfo> weekInfos = weekInfoRepo.findByMonthAndYear(month, year);
 
-        for (Long userId : allUsers.keySet()) {
+        // -------------------------------
+        // 6️⃣ PROCESS EACH USER
+        // -------------------------------
+        for (Long userId : users.keySet()) {
 
-            for (WeekInfo weekInfo : weekInfos) {
+            List<HolidayDTO> userHolidayCalendar =
+                    buildUserMonthlyCalendar(userId, month, year,
+                            lmsHolidays, weekendHolidays, allLeaves);
 
-                // CASE 5 — Already reviewed → Skip
-                boolean exists = weeklyReviewRepo
-                        .findByUserIdAndWeekInfo_Id(userId, weekInfo.getId())
-                        .isPresent();
+            Map<LocalDate, List<HolidayDTO>> holidayMap = userHolidayCalendar.stream()
+                    .collect(Collectors.groupingBy(
+                            HolidayDTO::getHolidayDate,
+                            LinkedHashMap::new,
+                            Collectors.toList()
+                    ));
 
-                if (exists) {
-                    continue;
-                }
+            for (WeekInfo week : weekInfos) {
 
-                // STEP 4 → Fetch holidays for USER specifically
-                List<HolidayDTO> holidays =
-                        holidayExcludeUsersService.getUserHolidaysAndLeave(userId, month, year);
+                boolean exists = weeklyReviewRepo.findByUserIdAndWeekInfo_Id(userId, week.getId()).isPresent();
+                if (exists) continue;
 
-                // Build holidayMap
-                Map<LocalDate, Map<String, Object>> holidayMap =
-                        holidays.stream()
-                                .filter(h -> h.getHolidayDate() != null)
-                                .collect(Collectors.toMap(
-                                        HolidayDTO::getHolidayDate,
-                                        this::convertHolidayToMap,
-                                        (a, b) -> a,
-                                        LinkedHashMap::new
-                                ));
-
-                // Build weekly date list
-                List<LocalDate> weekDates = weekInfo.getStartDate()
-                        .datesUntil(weekInfo.getEndDate().plusDays(1))
+                List<LocalDate> weekDates = week.getStartDate()
+                        .datesUntil(week.getEndDate().plusDays(1))
                         .collect(Collectors.toList());
 
-                // CASE 1 — Full Holiday Week?
-                boolean fullHolidayWeek = isFullHolidayWeek(weekDates, holidayMap);
+                if (!isFullHolidayWeek(weekDates, holidayMap)) continue;
 
-                if (!fullHolidayWeek) {
-                    continue;
-                }
-
-                // Auto-generate timesheets
-                autoGenerateTimesheets(userId, weekInfo, weekDates);
-
-                // Auto-approve weekly review
-                createApprovedReview(userId, weekInfo);
+                autoGenerateTimesheets(userId, week, weekDates);
+                createWeeklyReview(userId, week);
             }
         }
     }
 
-    private boolean isFullHolidayWeek(List<LocalDate> weekDates,
-                                      Map<LocalDate, Map<String, Object>> holidayMap) {
+    // ------------------------- 
+    // Build User Calendar 
+    // -------------------------
+    private List<HolidayDTO> buildUserMonthlyCalendar(
+            Long userId,
+            int month,
+            int year,
+            List<HolidayDTO> lmsHolidays,
+            List<HolidayDTO> weekendHolidays,
+            List<LeaveDTO> allLeaves
+    ) {
 
-        for (LocalDate date : weekDates) {
-            Map<String, Object> h = holidayMap.get(date);
+        // Fetch exclusions
+        List<HolidayExcludeUsers> excluded = holidayExcludeUsersRepo.findByUserId(userId);
+        Set<LocalDate> excludedDates = excluded.stream()
+                .map(HolidayExcludeUsers::getHolidayDate)
+                .collect(Collectors.toSet());
 
-            if (h == null) return false;
+        // Filter leaves for user
+        List<HolidayDTO> userLeaves = convertLeavesToHolidayDTO(allLeaves, userId, month, year);
 
-            Object submit = h.get("submitTimesheet");
+        // Combine all
+        List<HolidayDTO> combined = new ArrayList<>();
+        combined.addAll(lmsHolidays);
+        combined.addAll(weekendHolidays);
+        combined.addAll(userLeaves);
 
-            if (!(submit instanceof Boolean) || ((Boolean) submit)) {
-                return false;
+        // Apply user exclusions + merge duplicates
+        Map<LocalDate, List<HolidayDTO>> grouped =
+                combined.stream()
+                        .collect(Collectors.groupingBy(
+                                HolidayDTO::getHolidayDate,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ));
+
+        List<HolidayDTO> finalList = new ArrayList<>();
+
+        for (Map.Entry<LocalDate, List<HolidayDTO>> entry : grouped.entrySet()) {
+            LocalDate date = entry.getKey();
+            List<HolidayDTO> list = entry.getValue();
+
+            HolidayDTO merged = mergeHolidayEntries(list);
+
+            // Apply user exclusions
+            boolean submitTimesheetOverride = excludedDates.contains(date);
+            if (submitTimesheetOverride) {
+                merged.setSubmitTimesheet(true);
+                merged.setTimeSheetReviews("Allowed to Submit on Holiday");
             }
+
+            finalList.add(merged);
+        }
+
+        return finalList.stream()
+                .sorted(Comparator.comparing(HolidayDTO::getHolidayDate))
+                .toList();
+    }
+
+    // -------------------------
+    // Merge duplicates correctly
+    // -------------------------
+    private HolidayDTO mergeHolidayEntries(List<HolidayDTO> list) {
+
+        HolidayDTO base = list.get(0);
+
+        boolean submit = list.stream().anyMatch(HolidayDTO::isSubmitTimesheet);
+
+        base.setSubmitTimesheet(submit);
+
+        return base;
+    }
+
+    // -------------------------
+    // Convert LEAVES → HolidayDTO
+    // -------------------------
+    private List<HolidayDTO> convertLeavesToHolidayDTO(List<LeaveDTO> allLeaves, Long userId, int month, int year) {
+
+        return allLeaves.stream()
+                .filter(l -> l.getEmployeeId().equals(userId))
+                .flatMap(l -> {
+                    LocalDate start = l.getStartDate();
+                    LocalDate end = l.getEndDate();
+
+                    LocalDate mStart = LocalDate.of(year, month, 1);
+                    LocalDate mEnd = mStart.withDayOfMonth(mStart.lengthOfMonth());
+
+                    LocalDate s = start.isBefore(mStart) ? mStart : start;
+                    LocalDate e = end.isAfter(mEnd) ? mEnd : end;
+
+                    List<HolidayDTO> list = new ArrayList<>();
+
+                    for (LocalDate d = s; !d.isAfter(e); d = d.plusDays(1)) {
+                        if (d.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                                d.getDayOfWeek() == DayOfWeek.SUNDAY)
+                            continue;
+
+                        HolidayDTO dto = new HolidayDTO();
+                        dto.setHolidayId(0L);
+                        dto.setHolidayName("Leave Day");
+                        dto.setHolidayDate(d);
+                        dto.setHolidayDescription(l.getReason());
+                        dto.setType("LEAVE");
+                        dto.setCountry("India");
+                        dto.setState("All States");
+                        dto.setYear(year);
+                        dto.setLeave(true);
+                        dto.setSubmitTimesheet(false);
+                        dto.setTimeSheetReviews(
+                                l.getStatus().equalsIgnoreCase("APPROVED") ? "Leave Approved" : "Leave Pending"
+                        );
+
+                        list.add(dto);
+                    }
+
+                    return list.stream();
+                })
+                .toList();
+    }
+
+    // -------------------------
+    // Weekend generator
+    // -------------------------
+    private List<HolidayDTO> generateWeekendHolidays(int month, int year) {
+
+        List<HolidayDTO> weekends = new ArrayList<>();
+
+        LocalDate start = LocalDate.of(year, month, 1);
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+
+            if (d.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                d.getDayOfWeek() == DayOfWeek.SUNDAY) {
+
+                HolidayDTO dto = new HolidayDTO();
+                dto.setHolidayId(0L);
+                dto.setHolidayName(d.getDayOfWeek() == DayOfWeek.SATURDAY ? "Saturday" : "Sunday");
+                dto.setHolidayDate(d);
+                dto.setHolidayDescription("Casual Monthly Weekend");
+                dto.setType("WEEKEND");
+                dto.setCountry("India");
+                dto.setState("All States");
+                dto.setSubmitTimesheet(false);
+                dto.setTimeSheetReviews("Weekend Holiday");
+
+                weekends.add(dto);
+            }
+        }
+
+        return weekends;
+    }
+
+    // -------------------------
+    // LMS Holidays (ONCE)
+    // -------------------------
+    private List<HolidayDTO> fetchLmsHolidays(int month, int year, String authHeader) {
+
+        try {
+            String url = String.format("%s/api/holidays/month/%d", lmsBaseUrl, month);
+
+            ResponseEntity<List<HolidayDTO>> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            new HttpEntity<>(Map.of("Authorization", authHeader)),
+                            new ParameterizedTypeReference<List<HolidayDTO>>() {}
+                    );
+
+            return response.getBody() != null ? response.getBody() : List.of();
+
+        } catch (Exception e) {
+            System.err.println("⚠ Failed LMS holidays: " + e.getMessage());
+            return List.of();
+        }
+    }
+
+    // -------------------------
+    // Check Full Holiday Week
+    // -------------------------
+    private boolean isFullHolidayWeek(
+            List<LocalDate> weekDates,
+            Map<LocalDate, List<HolidayDTO>> holidayMap
+    ) {
+        for (LocalDate d : weekDates) {
+
+            List<HolidayDTO> list = holidayMap.get(d);
+
+            if (list == null || list.isEmpty())
+                return false;
+
+            boolean requiresSubmission = list.stream()
+                    .anyMatch(HolidayDTO::isSubmitTimesheet);
+
+            if (requiresSubmission)
+                return false;
         }
         return true;
     }
 
-    private void autoGenerateTimesheets(Long userId,
-                                        WeekInfo weekInfo,
-                                        List<LocalDate> weekDates) {
+    // -------------------------
+    // Auto-generate timesheets
+    // -------------------------
+    private void autoGenerateTimesheets(Long userId, WeekInfo week, List<LocalDate> dates) {
 
         LocalDateTime now = LocalDateTime.now();
 
-        for (LocalDate date : weekDates) {
+        for (LocalDate d : dates) {
 
-            boolean weekend =
-                    date.getDayOfWeek() == DayOfWeek.SATURDAY ||
-                            date.getDayOfWeek() == DayOfWeek.SUNDAY;
+            if (timeSheetRepo.existsByUserIdAndWorkDate(userId, d))
+                continue;
+
+            boolean weekend = (d.getDayOfWeek() == DayOfWeek.SATURDAY ||
+                               d.getDayOfWeek() == DayOfWeek.SUNDAY);
 
             BigDecimal hours = weekend ? BigDecimal.ZERO : BigDecimal.valueOf(8);
 
             TimeSheet ts = new TimeSheet();
             ts.setUserId(userId);
-            ts.setWeekInfo(weekInfo);
-            ts.setWorkDate(date);
+            ts.setWorkDate(d);
+            ts.setWeekInfo(week);
             ts.setHoursWorked(hours);
             ts.setAutoGenerated(true);
             ts.setStatus(TimeSheet.Status.APPROVED);
-            ts.setEntries(Collections.emptyList());
             ts.setCreatedAt(now);
             ts.setUpdatedAt(now);
 
@@ -151,29 +354,18 @@ public class FullHolidayWeekProcessorService {
         }
     }
 
-    private void createApprovedReview(Long userId, WeekInfo weekInfo) {
+    // -------------------------
+    // Create Weekly Review
+    // -------------------------
+    private void createWeeklyReview(Long userId, WeekInfo week) {
 
-        LocalDateTime now = LocalDateTime.now();
+        WeeklyTimeSheetReview r = new WeeklyTimeSheetReview();
+        r.setUserId(userId);
+        r.setWeekInfo(week);
+        r.setStatus(WeeklyTimeSheetReview.Status.APPROVED);
+        r.setSubmittedAt(LocalDateTime.now());
+        r.setReviewedAt(LocalDateTime.now());
 
-        WeeklyTimeSheetReview review = new WeeklyTimeSheetReview();
-        review.setUserId(userId);
-        review.setWeekInfo(weekInfo);
-        review.setStatus(WeeklyTimeSheetReview.Status.APPROVED);
-        review.setSubmittedAt(now);
-        review.setReviewedAt(now);
-
-        weeklyReviewRepo.save(review);
-    }
-
-    private Map<String, Object> convertHolidayToMap(HolidayDTO h) {
-
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("holidayId", h.getHolidayId());
-        map.put("holidayName", h.getHolidayName());
-        map.put("holidayDate", h.getHolidayDate().toString());
-        map.put("submitTimesheet", h.isSubmitTimesheet());
-        map.put("description", h.getHolidayDescription());
-
-        return map;
+        weeklyReviewRepo.save(r);
     }
 }

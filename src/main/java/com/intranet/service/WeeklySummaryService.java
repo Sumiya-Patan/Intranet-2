@@ -200,9 +200,10 @@ public class WeeklySummaryService {
             tsDTO.setDefaultHolidayTimesheet(isDefaultHolidayTimesheet);
 
             if (actionStatusList.isEmpty()) {
-                overallStatus = "SUBMITTED";
-                actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "PENDING"));
-                    } else if (anyRejected) {
+                overallStatus = "APPROVED";
+                actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "APPROVED"));
+                    }
+             else if (anyRejected) {
                         overallStatus = "REJECTED";
                     } else if (allApproved) {
                         overallStatus = "APPROVED";
