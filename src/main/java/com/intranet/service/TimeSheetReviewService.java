@@ -431,6 +431,10 @@ public class TimeSheetReviewService {
         // --------------------------------------------------------
         for (TimeSheet ts : sheets) {
 
+            if (ts.getStatus() != TimeSheet.Status.APPROVED || ts.getStatus() != TimeSheet.Status.REJECTED) {
+                throw new IllegalArgumentException("Timesheet already reviewed.");
+            }
+
             TimeSheetReview review = reviewRepo
                     .findByTimeSheet_IdAndManagerId(ts.getId(), managerId)
                     .orElseGet(TimeSheetReview::new);
