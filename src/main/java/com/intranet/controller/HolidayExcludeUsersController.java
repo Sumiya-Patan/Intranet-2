@@ -75,5 +75,17 @@ public class HolidayExcludeUsersController {
             }
         }
 
-    
+    @GetMapping("/all")
+        @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
+        @Operation(summary = "Get all Holiday Exclude Users for all managers")
+        public ResponseEntity<?> getAllForAllManagers() {
+            try {
+                int month=java.time.LocalDate.now().getMonthValue();
+                int year=java.time.LocalDate.now().getYear();
+                return ResponseEntity.ok(service.getAllForAllManagers(month,year));
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body(e.getMessage());
+            }
+        }
+
 }

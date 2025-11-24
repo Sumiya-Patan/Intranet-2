@@ -9,6 +9,7 @@ public class HolidayExcludeResponseDTO {
     private Long userId;
     private String userName;
     private Long managerId;
+    private String managerName;
     private LocalDate holidayDate;
     private String reason;
 }

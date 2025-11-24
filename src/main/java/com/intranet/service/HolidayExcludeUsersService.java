@@ -6,8 +6,10 @@ import com.intranet.dto.HolidayExcludeUsersRequestDTO;
 import com.intranet.dto.external.ManagerInfoDTO;
 import com.intranet.entity.HolidayExcludeUsers;
 import com.intranet.repository.HolidayExcludeUsersRepo;
+import com.intranet.util.cache.UserDirectoryService;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +39,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class HolidayExcludeUsersService {
+
+
+    private final UserDirectoryService userDirectoryService;
 
     private HttpEntity<Void> buildEntityWithAuth() {
 
@@ -74,6 +80,11 @@ public class HolidayExcludeUsersService {
         if (repository.existsByUserIdAndManagerIdAndHolidayDate(request.getUserId(), managerId, request.getHolidayDate())) {
             throw new IllegalArgumentException("Holiday exclusion already exists for this user on the specified date");
         }
+
+        if (repository.existsByUserIdAndHolidayDate(request.getUserId(), request.getHolidayDate())) {
+            throw new IllegalArgumentException("Holiday exclusion already exists for this user on the specified date");
+        }
+
         HolidayExcludeUsers entity = new HolidayExcludeUsers();
         entity.setUserId(request.getUserId());
         entity.setManagerId(managerId);
@@ -611,6 +622,101 @@ public class HolidayExcludeUsersService {
         }
         return weekends;
         }
+     public List<HolidayExcludeResponseDTO> getAllForAllManagers() {
+
+        List<HolidayExcludeUsers> users = repository.findAll();
+        if (users.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Get Authorization Header
+        HttpEntity<Void> entity = buildEntityWithAuth();
+        String authHeader = entity.getHeaders().getFirst("Authorization");
+
+        // Fetch ALL USERS (cached)
+        Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
+
+        return users.stream().map(user -> {
+
+            HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
+            dto.setId(user.getId());
+            dto.setUserId(user.getUserId());
+            dto.setManagerId(user.getManagerId());
+            dto.setHolidayDate(user.getHolidayDate());
+            dto.setReason(user.getReason());
+
+            // Set User Name
+            Map<String, Object> userInfo = allUsers.get(user.getUserId());
+            String userName = (userInfo != null)
+                    ? userInfo.get("name").toString()
+                    : "Unknown User";
+            dto.setUserName(userName);
+
+            // Set Manager Name
+            Map<String, Object> managerInfo = allUsers.get(user.getManagerId());
+            String managerName = (managerInfo != null)
+                    ? managerInfo.get("name").toString()
+                    : "Unknown Manager";
+            dto.setManagerName(managerName);
+
+            return dto;
+
+        }).collect(Collectors.toList());
+        }
+
+
+        public List<HolidayExcludeResponseDTO> getAllForAllManagers(int month, int year) {
+
+    List<HolidayExcludeUsers> users = repository.findAll();
+    if (users.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Filter by month & year BEFORE building DTOs
+    List<HolidayExcludeUsers> filtered = users.stream()
+            .filter(u -> u.getHolidayDate() != null)
+            .filter(u -> u.getHolidayDate().getYear() == year)
+            .filter(u -> u.getHolidayDate().getMonthValue() == month)
+            .collect(Collectors.toList());
+
+    if (filtered.isEmpty()) {
+        return Collections.emptyList();
+    }
+
+    // Get Authorization Header
+    HttpEntity<Void> entity = buildEntityWithAuth();
+    String authHeader = entity.getHeaders().getFirst("Authorization");
+
+    // Fetch ALL USERS (cached)
+    Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
+
+    return filtered.stream().map(user -> {
+
+        HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
+        dto.setId(user.getId());
+        dto.setUserId(user.getUserId());
+        dto.setManagerId(user.getManagerId());
+        dto.setHolidayDate(user.getHolidayDate());
+        dto.setReason(user.getReason());
+
+        // Set User Name
+        Map<String, Object> userInfo = allUsers.get(user.getUserId());
+        String userName = (userInfo != null)
+                ? userInfo.get("name").toString()
+                : "Unknown User";
+        dto.setUserName(userName);
+
+        // Set Manager Name
+        Map<String, Object> managerInfo = allUsers.get(user.getManagerId());
+        String managerName = (managerInfo != null)
+                ? managerInfo.get("name").toString()
+                : "Unknown Manager";
+        dto.setManagerName(managerName);
+
+        return dto;
+
+    }).collect(Collectors.toList());
+    }
 
 }
 
