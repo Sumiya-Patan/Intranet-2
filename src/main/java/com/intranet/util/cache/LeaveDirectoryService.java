@@ -57,7 +57,7 @@ public class LeaveDirectoryService {
 
         } catch (Exception e) {
             System.err.println("⚠ Failed to fetch leaves: " + e.getMessage());
-            return Collections.emptyList();
+            throw e;
         }
     }
 
@@ -160,26 +160,7 @@ public class LeaveDirectoryService {
         throw e;
     }
     }
-    private void validatePendingLeaves(List<Map<String, Object>> leaves,
-                                   Long userId, int month, int year) {
-
-    boolean hasPending = leaves.stream()
-            .anyMatch(leave ->
-                    "PENDING".equalsIgnoreCase(
-                            String.valueOf(leave.get("status"))
-                    )
-            );
-
-    if (hasPending) {
-        throw new IllegalStateException(
-                "❌ Error: User " + userId +
-                " has PENDING leaves in " + month + "/" + year +
-                ". All leaves must be APPROVED before generating the report."
-        );
-    }
-    }
-
-
+    
     private LeaveDTO convertToDto(Map<String, Object> row) {
 
         LeaveDTO dto = new LeaveDTO();

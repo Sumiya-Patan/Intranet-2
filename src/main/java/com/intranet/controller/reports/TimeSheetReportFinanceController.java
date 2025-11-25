@@ -25,7 +25,7 @@ public class TimeSheetReportFinanceController {
     @GetMapping("/monthly_finance")
     @Operation  (summary = "Get monthly finance report", description = "Retrieve a detailed monthly finance report.")
     // @PreAuthorize("hasAuthority('VIEW_FINANCE_REPORT')")
-    public ResponseEntity<Map<String, Object>> getMonthlyFinanceReport(
+    public ResponseEntity<?> getMonthlyFinanceReport(
         @RequestParam(required = false) Integer month,
         @RequestParam(required = false) Integer year
         ) {
@@ -48,6 +48,11 @@ public class TimeSheetReportFinanceController {
             Map<String, Object> response = timesheetFinanceReportService.getTimesheetFinanceReport(month, year);
                     return ResponseEntity.ok(response);
         }
+
+        catch(IllegalStateException e){
+                return ResponseEntity.badRequest().body(e.getMessage());
+        }
+
         catch(Exception e){
                 return ResponseEntity.badRequest().body(Map.of("error", "Internal server error"));
         }
