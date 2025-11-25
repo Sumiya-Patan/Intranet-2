@@ -74,7 +74,7 @@ public class DashboardService {
         Map<String, BigDecimal> weeklySummary = calculateWeeklySummary(entries, timeSheets);
 
         // 7️⃣ Productivity Details
-        Map<String, Object> productivityDetails = calculateProductivityDetails(entries);
+        Map<String, Object> billablePercentageDetails = calculateBillablePercentageDetails(entries);
 
         // ✅ Step 1: Calculate total from entries
         BigDecimal totalEntryHours = entries.stream()
@@ -112,7 +112,7 @@ public class DashboardService {
                 "billableActivity", billableActivity,
                 "projectSummary", projectSummary,
                 "weeklySummary", weeklySummary,
-                "productivityDetails", productivityDetails,
+                "billablePercentageDetails", billablePercentageDetails,
                 "totalHours", totalHours,
                 "averageHoursPerDay", avgHoursPerDay,
                 "dateRange", Map.of("startDate", startDate, "endDate", endDate)
@@ -240,7 +240,7 @@ public class DashboardService {
 
 
     // ✅ Productivity Details (by day)
-    private Map<String, Object> calculateProductivityDetails(List<TimeSheetEntry> entries) {
+    private Map<String, Object> calculateBillablePercentageDetails(List<TimeSheetEntry> entries) {
         // 1️⃣ Group entries by day of week
     Map<DayOfWeek, List<TimeSheetEntry>> dayWise = entries.stream()
             .filter(e -> e.getTimeSheet() != null && e.getTimeSheet().getWorkDate() != null)
@@ -262,7 +262,7 @@ public class DashboardService {
         for (DayOfWeek day : DayOfWeek.values()) {
             empty.put(day.name().toLowerCase(), Map.of(
                     "billableHours", BigDecimal.ZERO,
-                    "productivityScore", 0.0
+                    "billablePercentage", 0.0
             ));
         }
         return empty;
@@ -291,7 +291,7 @@ public class DashboardService {
 
         productivity.put(day.name().toLowerCase(), Map.of(
                 "billableHours", dayBillable,
-                "productivityScore", pct.doubleValue() // ← numeric, NOT string
+                "billablePercentage", pct.doubleValue() // ← numeric, NOT string
         ));
     }
 
