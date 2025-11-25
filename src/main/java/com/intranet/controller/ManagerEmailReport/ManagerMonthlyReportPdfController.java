@@ -49,7 +49,7 @@ public class ManagerMonthlyReportPdfController {
             
             // Generate report data map
             java.util.Map<String, Object> report = managerMonthlyReportService.generateManagerMonthlyReport(
-                    currentUser.getId(), startDate, endDate, authHeader
+                    currentUser.getId(), startDate, endDate, month, year, authHeader
             );
             
             report=ManagerReportDtoAdapter.adapt(report);

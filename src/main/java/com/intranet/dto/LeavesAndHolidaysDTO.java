@@ -19,6 +19,7 @@ public class LeavesAndHolidaysDTO {
     private int totalHolidays;
     private int totalLeavesDays;
     private int totalHolidaysDays;
+    private int totalWorkingDays;
     private List<LocalDate> leaveDates;
     private List<LocalDate> holidayDates;
 }

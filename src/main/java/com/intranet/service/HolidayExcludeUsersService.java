@@ -338,8 +338,8 @@ public class HolidayExcludeUsersService {
     for (Map<String, Object> leave : leaveData) {
         // extract fields safely
         String status = leave.get("status") != null ? leave.get("status").toString() : "";
-        if (!"APPROVED".equalsIgnoreCase(status) && !"PENDING".equalsIgnoreCase(status)) {
-            // skip rejected or other states
+        if (!"APPROVED".equalsIgnoreCase(status)) {
+            // only approved leaves
             continue;
         }
 

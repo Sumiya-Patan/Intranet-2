@@ -4,17 +4,20 @@ import com.intranet.dto.LeavesAndHolidaysDTO;
 import com.intranet.dto.MonthlyUserReportDTO;
 import com.intranet.dto.WeekSummaryDTO;
 import com.intranet.dto.WeeklySummaryDTO;
+import com.intranet.dto.lms.LeaveDTO;
 import com.intranet.dto.lms.UserLeaveBreakdown;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetEntry;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.service.report.TimesheetFinanceReportService;
+import com.intranet.util.cache.LeaveDirectoryService;
 import com.intranet.util.cache.ProjectDirectoryService;
 import com.intranet.util.cache.UserDirectoryService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MonthlyUserReportService {
 
+        @Value("${leave.daily.hours}")
+        private int leaveHours;
+
     private final TimeSheetRepo timeSheetRepo;
     private final HolidayExcludeUsersService holidayService;
 
@@ -37,6 +43,8 @@ public class MonthlyUserReportService {
     private final ProjectDirectoryService projectDirectoryService;
 
     private final TimesheetFinanceReportService timesheetFinanceReportService;
+
+    private final LeaveDirectoryService leaveDirectoryService;
     
     private final WeeklySummaryService weeklySummaryService;
     // private final UserRepository userRepository; // optional for employee name
@@ -60,6 +68,9 @@ public class MonthlyUserReportService {
     }
 
     public MonthlyUserReportDTO getMonthlyUserReport(Long userId, int month, int year) {
+
+        LocalDate date = LocalDate.of(year, month, 1);
+        int totalDaysInMonth = date.lengthOfMonth();
 
         HttpEntity<Void> entity=buildEntityWithAuth();
         String authHeader = entity.getHeaders().getFirst("Authorization");
@@ -143,7 +154,7 @@ public class MonthlyUserReportService {
         int totalHolidays = HolidayDates.size();
 
 
-        UserLeaveBreakdown totalLeavesData = timesheetFinanceReportService.calculateLeaveDetailsForUser(userId, month, year,authHeader);
+        UserLeaveBreakdown totalLeavesData = calculateLeaveDetailsForUserReport(userId, month, year,authHeader);
         
         
         LeavesAndHolidaysDTO leavesAndHolidays = new LeavesAndHolidaysDTO();
@@ -152,6 +163,7 @@ public class MonthlyUserReportService {
         leavesAndHolidays.setLeaveDates(totalLeavesData.getLeaveDates());
         leavesAndHolidays.setTotalLeavesHours(totalLeavesData.getTotalHours());
         leavesAndHolidays.setTotalLeavesDays(totalLeavesData.getTotalDays());
+        leavesAndHolidays.setTotalWorkingDays(totalDaysInMonth-totalHolidays);
 
          // Project Summaries
 
@@ -204,6 +216,65 @@ public class MonthlyUserReportService {
     return weeklySummaryDTO.getWeeklySummary();
     }
 
+    public UserLeaveBreakdown calculateLeaveDetailsForUserReport(
+                Long userId, int month, int year, String authHeader) {
 
+        
+        // Fetch all leaves for the month using LMS cache
+        List<LeaveDTO> leaves = leaveDirectoryService.fetchLeavesUserIdUserReport(userId,year, month, authHeader);
+
+        BigDecimal totalLeaveHours = BigDecimal.ZERO;
+        int totalLeaveDays = 0;
+        List<LocalDate> leaveDates = new ArrayList<>();
+
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        LocalDate monthEnd = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
+
+        for (LeaveDTO leave : leaves) {
+
+                // Skip different user
+                if (!leave.getEmployeeId().equals(userId)) {
+                continue;
+                }
+
+                // Skip non-approved leaves
+                if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {
+                continue;
+                }
+
+                LocalDate start = leave.getStartDate();
+                LocalDate end = leave.getEndDate();
+
+                // Clamp to month
+                LocalDate effectiveStart = start.isBefore(monthStart) ? monthStart : start;
+                LocalDate effectiveEnd = end.isAfter(monthEnd) ? monthEnd : end;
+
+                // Iterate dates
+                LocalDate date = effectiveStart;
+                while (!date.isAfter(effectiveEnd)) {
+
+                switch (date.getDayOfWeek()) {
+                        case SATURDAY:
+                        case SUNDAY:
+                        break; // skip weekends
+
+                        default:
+                        totalLeaveHours = totalLeaveHours.add(BigDecimal.valueOf(leaveHours));
+                        totalLeaveDays++;
+                        leaveDates.add(date);
+                }
+
+                date = date.plusDays(1);
+                }
+        }
+
+        // Build response object
+        UserLeaveBreakdown breakdown = new UserLeaveBreakdown();
+        breakdown.totalHours = totalLeaveHours;
+        breakdown.totalDays = totalLeaveDays;
+        breakdown.leaveDates = leaveDates;
+
+        return breakdown;
+        }
 
 }

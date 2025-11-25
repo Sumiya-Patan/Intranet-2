@@ -58,6 +58,8 @@ public class ManagerViewReportController {
                             currentUser.getId(),
                             startDate,
                             endDate,
+                            month,
+                            year,
                             token
                     );
 

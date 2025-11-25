@@ -61,7 +61,7 @@ public class LeaveDirectoryService {
         }
     }
 
-    @Cacheable(value = "leaveCache", key = "'leaves__'+#year+'_'+#month")
+    // @Cacheable(value = "leaveCache", key = "'leaves__'+#year+'_'+#month")
     public List<LeaveDTO> fetchLeavesUserId(Long userId,int year, int month, String authHeader) {
 
         HttpHeaders headers = new HttpHeaders();
@@ -95,6 +95,90 @@ public class LeaveDirectoryService {
             return Collections.emptyList();
         }
     }
+
+    // @Cacheable(value = "leaveCache", key = "'leaves__User'+#year+'_'+#month")
+    public List<LeaveDTO> fetchLeavesUserIdUserReport(Long userId, int year, int month, String authHeader) {
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Authorization", authHeader);
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+    String url = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d",
+            lmsBaseUrl, userId, year, month);
+
+    try {
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {}
+        );
+
+        // 🔥 Validate LMS Response Status
+        if (!response.getStatusCode().equals(HttpStatus.OK)) {
+            throw new IllegalStateException(
+                    "Failed to fetch leaves from LMS for month " + month +
+                    ". LMS returned status: " + response.getStatusCode()
+            );
+        }
+        Map<String, Object> body = response.getBody();
+        if (body == null || !body.containsKey("data")) {
+            return Collections.emptyList();
+        }
+
+        List<Map<String, Object>> leaves = (List<Map<String, Object>>) body.get("data");
+
+        
+
+        // Convert map → DTO list
+        List<LeaveDTO> dtoList = leaves.stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+
+        // 🔥 Validate PENDING Leaves
+        boolean hasPending = dtoList.stream()
+                .anyMatch(l -> "PENDING".equalsIgnoreCase(l.getStatus()));
+
+        if (hasPending) {
+            throw new IllegalStateException(
+                    "You have PENDING leaves in " + month + "/" + year +
+                            ". All leaves must be APPROVED before generating the report."
+            );
+        }
+        System.out.println("------------------------");
+        System.out.println(dtoList);
+        System.out.println(hasPending);
+        return dtoList;
+
+    } 
+    catch(IllegalStateException e) {
+        System.err.println("⚠ Failed to fetch leaves: " + e.getMessage());
+        throw e;
+    }
+    catch (Exception e) {
+        System.err.println("⚠ Failed to fetch leaves: " + e.getMessage());
+        throw e;
+    }
+    }
+    private void validatePendingLeaves(List<Map<String, Object>> leaves,
+                                   Long userId, int month, int year) {
+
+    boolean hasPending = leaves.stream()
+            .anyMatch(leave ->
+                    "PENDING".equalsIgnoreCase(
+                            String.valueOf(leave.get("status"))
+                    )
+            );
+
+    if (hasPending) {
+        throw new IllegalStateException(
+                "❌ Error: User " + userId +
+                " has PENDING leaves in " + month + "/" + year +
+                ". All leaves must be APPROVED before generating the report."
+        );
+    }
+    }
+
 
     private LeaveDTO convertToDto(Map<String, Object> row) {
 

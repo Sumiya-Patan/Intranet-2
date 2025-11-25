@@ -36,7 +36,12 @@ public class MonthlyUserReportController {
         }
         MonthlyUserReportDTO report = reportService.getMonthlyUserReport(currentUser.getId(), month, year);
         return ResponseEntity.ok(report);
-        } catch (Exception e) {
+        } 
+        catch (IllegalStateException e) {
+        // PENDING leaves error
+        return ResponseEntity.badRequest().body(e.getMessage());
+        }
+        catch (Exception e) {
             return ResponseEntity.badRequest().body("Error generating report: " + e.getMessage());
         }
     }
