@@ -16,6 +16,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -240,52 +241,64 @@ public class DashboardService {
 
     // ✅ Productivity Details (by day)
     private Map<String, Object> calculateProductivityDetails(List<TimeSheetEntry> entries) {
-    Map<String, List<TimeSheetEntry>> dayWise = entries.stream()
+        // 1️⃣ Group entries by day of week
+    Map<DayOfWeek, List<TimeSheetEntry>> dayWise = entries.stream()
+            .filter(e -> e.getTimeSheet() != null && e.getTimeSheet().getWorkDate() != null)
             .collect(Collectors.groupingBy(
-                    e -> e.getTimeSheet() != null && e.getTimeSheet().getWorkDate() != null
-                            ? e.getTimeSheet().getWorkDate().getDayOfWeek().name().toLowerCase()
-                            : "unknown"
+                    e -> e.getTimeSheet().getWorkDate().getDayOfWeek(),
+                    LinkedHashMap::new,
+                    Collectors.toList()
             ));
 
+    // 2️⃣ Total billable hours across all days
+    BigDecimal totalBillable = entries.stream()
+            .filter(TimeSheetEntry::isBillable)
+            .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // If no billable hours → all productivity = 0
+    if (totalBillable.compareTo(BigDecimal.ZERO) == 0) {
+        Map<String, Object> empty = new LinkedHashMap<>();
+        for (DayOfWeek day : DayOfWeek.values()) {
+            empty.put(day.name().toLowerCase(), Map.of(
+                    "billableHours", BigDecimal.ZERO,
+                    "productivityScore", 0.0
+            ));
+        }
+        return empty;
+    }
+
+    // 3️⃣ Build per-day productivity
     Map<String, Object> productivity = new LinkedHashMap<>();
 
     for (DayOfWeek day : DayOfWeek.values()) {
-        List<TimeSheetEntry> dayEntries = dayWise.getOrDefault(day.name().toLowerCase(), new ArrayList<>());
 
-        // ✅ Handle null hours safely
-        BigDecimal totalHours = dayEntries.stream()
+        List<TimeSheetEntry> dayEntries = dayWise.getOrDefault(day, new ArrayList<>());
+
+        BigDecimal dayBillable = dayEntries.stream()
+                .filter(TimeSheetEntry::isBillable)
                 .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        long billableCount = dayEntries.stream().filter(TimeSheetEntry::isBillable).count();
-        long totalCount = dayEntries.size();
-        double billablePercentage = totalCount == 0 ? 0.0 : (billableCount * 100.0 / totalCount);
-
-        long tasksWorked = dayEntries.stream()
-                .map(TimeSheetEntry::getTaskId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .count();
-
-        long projectsWorked = dayEntries.stream()
-                .map(TimeSheetEntry::getProjectId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .count();
-
-        double productivityScore = Math.min(100.0, billablePercentage + (tasksWorked * 2) + (projectsWorked * 3));
+        // Productivity = (dayBillable / totalBillable) * 100
+        BigDecimal pct = BigDecimal.ZERO;
+        if (dayBillable.compareTo(BigDecimal.ZERO) > 0) {
+            pct = dayBillable
+                    .divide(totalBillable, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .setScale(2, RoundingMode.HALF_UP); // ← 2 decimals
+        }
 
         productivity.put(day.name().toLowerCase(), Map.of(
-                "totalHours", formatHours(totalHours == null ? BigDecimal.ZERO : totalHours),
-                "billablePercentage", round(billablePercentage, 1),
-                "tasksWorked", tasksWorked,
-                "projectsWorked", projectsWorked,
-                "productivityScore", round(productivityScore, 1)
+                "billableHours", dayBillable,
+                "productivityScore", pct.doubleValue() // ← numeric, NOT string
         ));
     }
 
     return productivity;
-    }
+        
+ }
+
 
 
     // ✅ Week-based Review Summary (using WeekInfo & WeekTimeSheetReview)
