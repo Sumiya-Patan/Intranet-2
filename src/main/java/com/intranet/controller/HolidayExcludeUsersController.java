@@ -7,8 +7,10 @@ import com.intranet.security.CurrentUser;
 import com.intranet.service.HolidayExcludeUsersService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -76,7 +78,7 @@ public class HolidayExcludeUsersController {
         }
 
     @GetMapping("/all")
-        @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
+        @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
         @Operation(summary = "Get all Holiday Exclude Users for all managers")
         public ResponseEntity<?> getAllForAllManagers() {
             try {
@@ -87,5 +89,25 @@ public class HolidayExcludeUsersController {
                 return ResponseEntity.badRequest().body(e.getMessage());
             }
         }
+
+     @GetMapping("/allusers")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
+    @Operation(summary = "Get all users from UMS")
+    public ResponseEntity<?> getAllUsers(HttpServletRequest request) {
+        try {
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || authHeader.isBlank()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Authorization header missing");
+            }
+
+            return ResponseEntity.ok(service.fetchAllUsers(authHeader));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+        }
+
 
 }

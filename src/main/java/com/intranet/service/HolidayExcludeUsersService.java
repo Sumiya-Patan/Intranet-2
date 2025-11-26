@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -681,58 +682,101 @@ public class HolidayExcludeUsersService {
         }
 
 
-        public List<HolidayExcludeResponseDTO> getAllForAllManagers(int month, int year) {
+    public List<HolidayExcludeResponseDTO> getAllForAllManagers(int month, int year) {
 
-    List<HolidayExcludeUsers> users = repository.findAll();
-    if (users.isEmpty()) {
-        return Collections.emptyList();
+        List<HolidayExcludeUsers> users = repository.findAll();
+        if (users.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Filter by month & year BEFORE building DTOs
+        List<HolidayExcludeUsers> filtered = users.stream()
+                .filter(u -> u.getHolidayDate() != null)
+                .filter(u -> u.getHolidayDate().getYear() == year)
+                .filter(u -> u.getHolidayDate().getMonthValue() == month)
+                .collect(Collectors.toList());
+
+        if (filtered.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Get Authorization Header
+        HttpEntity<Void> entity = buildEntityWithAuth();
+        String authHeader = entity.getHeaders().getFirst("Authorization");
+
+        // Fetch ALL USERS (cached)
+        Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
+
+        return filtered.stream().map(user -> {
+
+            HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
+            dto.setId(user.getId());
+            dto.setUserId(user.getUserId());
+            dto.setManagerId(user.getManagerId());
+            dto.setHolidayDate(user.getHolidayDate());
+            dto.setReason(user.getReason());
+
+            // Set User Name
+            Map<String, Object> userInfo = allUsers.get(user.getUserId());
+            String userName = (userInfo != null)
+                    ? userInfo.get("name").toString()
+                    : "Unknown User";
+            dto.setUserName(userName);
+
+            // Set Manager Name
+            Map<String, Object> managerInfo = allUsers.get(user.getManagerId());
+            String managerName = (managerInfo != null)
+                    ? managerInfo.get("name").toString()
+                    : "Unknown Manager";
+            dto.setManagerName(managerName);
+
+            return dto;
+
+        }).collect(Collectors.toList());
+        }
+
+
+    public List<Map<String, Object>> fetchAllUsers(String authHeader) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Authorization", authHeader);
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+    String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+
+    try {
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                umsUrl, HttpMethod.GET, entity,
+                new ParameterizedTypeReference<>() {}
+        );
+
+        Map<String, Object> body = response.getBody();
+        if (body == null || !body.containsKey("users")) {
+            return Collections.emptyList();
+        }
+
+        List<Map<String, Object>> users = (List<Map<String, Object>>) body.get("users");
+
+        return users.stream().map(u -> {
+            String firstName = (String) u.getOrDefault("first_name", "");
+            String lastName = (String) u.getOrDefault("last_name", "");
+            String fullName = (firstName + " " + lastName).trim();
+            String email = (String) u.getOrDefault("mail", "unknown@example.com");
+
+            Map<String, Object> userMap = new LinkedHashMap<>();
+            userMap.put("firstName", firstName);
+            userMap.put("lastName", lastName);
+            userMap.put("fullName", fullName);
+            userMap.put("id", ((Number) u.get("user_id")).longValue());
+            userMap.put("email", email);
+
+            return userMap;
+        }).collect(Collectors.toList());
+
+    } catch (Exception e) {
+        System.err.println("⚠️ Failed to fetch users from UMS: " + e.getMessage());
+        throw e;
     }
 
-    // Filter by month & year BEFORE building DTOs
-    List<HolidayExcludeUsers> filtered = users.stream()
-            .filter(u -> u.getHolidayDate() != null)
-            .filter(u -> u.getHolidayDate().getYear() == year)
-            .filter(u -> u.getHolidayDate().getMonthValue() == month)
-            .collect(Collectors.toList());
-
-    if (filtered.isEmpty()) {
-        return Collections.emptyList();
     }
-
-    // Get Authorization Header
-    HttpEntity<Void> entity = buildEntityWithAuth();
-    String authHeader = entity.getHeaders().getFirst("Authorization");
-
-    // Fetch ALL USERS (cached)
-    Map<Long, Map<String, Object>> allUsers = userDirectoryService.fetchAllUsers(authHeader);
-
-    return filtered.stream().map(user -> {
-
-        HolidayExcludeResponseDTO dto = new HolidayExcludeResponseDTO();
-        dto.setId(user.getId());
-        dto.setUserId(user.getUserId());
-        dto.setManagerId(user.getManagerId());
-        dto.setHolidayDate(user.getHolidayDate());
-        dto.setReason(user.getReason());
-
-        // Set User Name
-        Map<String, Object> userInfo = allUsers.get(user.getUserId());
-        String userName = (userInfo != null)
-                ? userInfo.get("name").toString()
-                : "Unknown User";
-        dto.setUserName(userName);
-
-        // Set Manager Name
-        Map<String, Object> managerInfo = allUsers.get(user.getManagerId());
-        String managerName = (managerInfo != null)
-                ? managerInfo.get("name").toString()
-                : "Unknown Manager";
-        dto.setManagerName(managerName);
-
-        return dto;
-
-    }).collect(Collectors.toList());
-    }
-
 }
 
