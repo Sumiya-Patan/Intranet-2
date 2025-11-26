@@ -308,25 +308,20 @@ public class WeeklySummaryService {
 
     @Transactional
     public WeeklySummaryDTO getUserWeeklyTimeSheetHistoryRange(Long userId, LocalDate startDate, LocalDate endDate) {
-        LocalDate now = LocalDate.now();
+        LocalDate today = LocalDate.now();
 
-        // ✅ If no start/end provided, use current month
-        LocalDate effectiveStart = (startDate != null) ? startDate : now.withDayOfMonth(1);
-        LocalDate effectiveEnd = (endDate != null) ? endDate : now.withDayOfMonth(now.lengthOfMonth());
-
-        // Fetch all weeks overlapping the range (startDate >= start, endDate <= end)
-        List<WeekInfo> weeks = weekInfoRepo
-                .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(effectiveStart, effectiveEnd);
-
-        if (weeks.isEmpty()) {
-            WeeklySummaryDTO empty = new WeeklySummaryDTO();
-            empty.setUserId(userId);
-            empty.setWeeklySummary(Collections.emptyList());
-            return empty;
+        if (startDate == null || endDate == null) {
+            startDate = today.withDayOfMonth(1);
+            endDate = today.withDayOfMonth(today.lengthOfMonth());
         }
 
-        List<Long> weekIds = weeks.stream().map(WeekInfo::getId).toList();
+        LocalDate startOfMonth = startDate;
+        LocalDate endOfMonth = endDate;
 
+        List<WeekInfo> weeks = weekInfoRepo
+                .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(startOfMonth, endOfMonth);
+
+        List<Long> weekIds = weeks.stream().map(WeekInfo::getId).collect(Collectors.toList());
         List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(userId, weekIds);
 
         if (timesheets.isEmpty()) {
@@ -336,7 +331,7 @@ public class WeeklySummaryService {
             return empty;
         }
 
-        // ✅ Fetch project info
+        // 🔹 Step 1: Call PMS to get all projects
         String projectsUrl = String.format("%s/projects", pmsBaseUrl);
         ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 projectsUrl,
@@ -346,19 +341,23 @@ public class WeeklySummaryService {
         );
 
         List<Map<String, Object>> projects = Optional.ofNullable(response.getBody()).orElse(Collections.emptyList());
-        Map<Long, Map<String, Object>> projectMap = projects.stream()
-                .collect(Collectors.toMap(p -> ((Number) p.get("id")).longValue(), p -> p));
+        Map<Long, Map<String, Object>> projectMap = new HashMap<>();
+        for (Map<String, Object> p : projects) {
+            Long projectId = ((Number) p.get("id")).longValue();
+            projectMap.put(projectId, p);
+        }
 
-        // ✅ Build week summaries
+        // 🔹 Step 2: Group by week and build DTOs
         List<WeekSummaryDTO> weeklySummaries = weeks.stream()
         .map(week -> buildWeekSummary(week, timesheets, projectMap))
         .sorted(Comparator.comparing(WeekSummaryDTO::getStartDate).reversed()) // current month → past
-        .toList();
+        .collect(Collectors.toList());
 
 
         WeeklySummaryDTO summary = new WeeklySummaryDTO();
         summary.setUserId(userId);
         summary.setWeeklySummary(weeklySummaries);
+
         return summary;
     }
 
