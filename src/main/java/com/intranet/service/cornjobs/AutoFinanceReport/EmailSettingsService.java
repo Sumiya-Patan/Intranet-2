@@ -1,0 +1,33 @@
+package com.intranet.service.cornjobs.AutoFinanceReport;
+
+import org.springframework.stereotype.Service;
+
+import com.intranet.entity.EmailSettings;
+import com.intranet.repository.EmailSettingsRepo;
+import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class EmailSettingsService {
+
+    private final EmailSettingsRepo emailSettingsRepository;
+
+    public List<EmailSettings> getAllEmailSettings() {
+        return emailSettingsRepository.findAll();
+    }
+
+    public EmailSettings updateEmailSettings(Long id, String email) {
+    return emailSettingsRepository.findById(id)
+        .map(existing -> {
+            if (email != null && !email.isEmpty()) {
+                existing.setEmail(email);
+            }
+            // Do NOT change reason since only email is updated
+            return emailSettingsRepository.save(existing);
+        })
+        .orElseThrow(() -> new RuntimeException("Email Settings not found with id: " + id));
+    }
+
+}
