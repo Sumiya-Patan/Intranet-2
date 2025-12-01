@@ -30,6 +30,7 @@ import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
 import com.intranet.repository.WeeklyTimeSheetReviewRepo;
+import com.intranet.service.HolidayExcludeUsersService;
 import com.intranet.service.external.ManagerWeeklySummaryService;
 
 import lombok.RequiredArgsConstructor;
@@ -37,12 +38,16 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ManagerMonthlyReportService {
+
+    @Value("${timesheet.expectedBaseHours}")
+     int expectedBaseHours; // 22 working days × 8 hours
     
 
     private final TimeSheetRepo timeSheetRepo;
     private final TimeSheetReviewRepo timeSheetReviewRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
     private final ManagerWeeklySummaryService managerWeeklySummaryService;
+    private final HolidayExcludeUsersService holidayExcludeUsersService;
 
     @Value("${pms.api.base-url}")
     private String pmsBaseUrl;
@@ -179,6 +184,16 @@ public class ManagerMonthlyReportService {
                 : billableHours.divide(totalHours, 2, RoundingMode.HALF_UP)
                         .multiply(BigDecimal.valueOf(100)).doubleValue();
 
+        // ✅ Step 1: Get holiday dates for users to exclude
+        List<LocalDate> holidayDates = holidayExcludeUsersService.getUserHolidayDates(month);
+
+        // ✅ Step 2: Filter to only include holidays from this year
+        holidayDates = holidayDates.stream()
+                .filter(date -> date != null && date.getYear() == year)
+                .toList();
+
+
+        int monthlyhrs=calculateExpectedHours(month, year, holidayDates);
         // ------------------------------
         // 4️⃣ Pending Approvals
         // ------------------------------
@@ -215,10 +230,10 @@ public class ManagerMonthlyReportService {
         Map<Long, Integer> projectCountMap = generateProjectCountMap(projects);
 
         Map<String, Object> underutilized =
-        generateUnderutilizedInsight(memberHours, nameCache);
+        generateUnderutilizedInsight(memberHours, nameCache,monthlyhrs);
 
         Map<String, Object> overworked =
-        generateOverworkedInsight(memberHours, nameCache);
+        generateOverworkedInsight(memberHours, nameCache,monthlyhrs);
 
         Map<String, Object> multiProjectWorkers =
         generateMultiProjectWorkersInsight(projectCountMap, nameCache);
@@ -731,14 +746,16 @@ public class ManagerMonthlyReportService {
     }
     private Map<String, Object> generateUnderutilizedInsight(
         Map<Long, BigDecimal> memberHours,
-        Map<Long, String> memberNames) {
+        Map<Long, String> memberNames,
+        int monthlyhrs
+    ) {
 
     List<Map<String, Object>> list = new ArrayList<>();
 
     // Filter < 176
     List<Map.Entry<Long, BigDecimal>> filtered = memberHours.entrySet()
             .stream()
-            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(176)) < 0)
+            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(monthlyhrs)) < 0)
             .sorted(Map.Entry.comparingByValue()) // lowest first
             .collect(Collectors.toList());
 
@@ -769,14 +786,15 @@ public class ManagerMonthlyReportService {
     }
     private Map<String, Object> generateOverworkedInsight(
         Map<Long, BigDecimal> memberHours,
-        Map<Long, String> memberNames) {
+        Map<Long, String> memberNames,
+        int monthlyhrs) {
 
     List<Map<String, Object>> list = new ArrayList<>();
 
     // Filter > 176
     List<Map.Entry<Long, BigDecimal>> filtered = memberHours.entrySet()
             .stream()
-            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(176)) > 0)
+            .filter(e -> e.getValue().compareTo(BigDecimal.valueOf(monthlyhrs)) > 0)
             .sorted((a, b) -> b.getValue().compareTo(a.getValue())) // highest first
             .collect(Collectors.toList());
 
@@ -986,5 +1004,25 @@ public class ManagerMonthlyReportService {
 
     return result;
     }
+    public int calculateExpectedHours(int month, int year, List<LocalDate> holidays) {
 
+    int weekdayHolidays = 0;
+
+    for (LocalDate d : holidays) {
+        switch (d.getDayOfWeek()) {
+            case MONDAY:
+            case TUESDAY:
+            case WEDNESDAY:
+            case THURSDAY:
+            case FRIDAY:
+                weekdayHolidays++;
+                break;
+            default:
+                // skip saturday & sunday
+                break;
+        }
+    }
+
+    return expectedBaseHours - (weekdayHolidays * 8);
+ }
 }   
