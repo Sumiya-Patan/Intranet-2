@@ -3,6 +3,7 @@ package com.intranet.controller.AutoFinanceReport;
 import com.intranet.entity.EmailSettings;
 import com.intranet.service.cornjobs.AutoFinanceReport.EmailSettingsService;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,6 +20,7 @@ public class EmailSettingsController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public List<EmailSettings> getAllEmailSettings() {
         return emailSettingsService.getAllEmailSettings();
     }

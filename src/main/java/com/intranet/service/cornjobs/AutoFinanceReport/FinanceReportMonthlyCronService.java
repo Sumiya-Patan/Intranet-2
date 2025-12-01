@@ -1,4 +1,4 @@
-package com.intranet.service.cornjobs;
+package com.intranet.service.cornjobs.AutoFinanceReport;
 
 import com.intranet.service.FinanceReportEmail.FinancialPdfEmailSender;
 import com.intranet.service.FinanceReportEmail.FinancialPdfGeneratorService;
