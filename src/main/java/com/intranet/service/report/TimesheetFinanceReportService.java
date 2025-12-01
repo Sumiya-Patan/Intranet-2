@@ -615,9 +615,9 @@ public class TimesheetFinanceReportService {
     for (LeaveDTO leave : leaves) {
 
        
-        //  if ("PENDING".equalsIgnoreCase(leave.getStatus())) {
-        //     throw new IllegalStateException("Leave is still pending needs the approval.");
-        // }
+         if ("PENDING".equalsIgnoreCase(leave.getStatus())) {
+            throw new IllegalStateException("Leave is still pending needs the approval.");
+        }
 
         // ✔ Skip non-approved leaves
         if (!"APPROVED".equalsIgnoreCase(leave.getStatus())) {

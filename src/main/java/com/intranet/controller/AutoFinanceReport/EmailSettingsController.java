@@ -26,6 +26,7 @@ public class EmailSettingsController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public EmailSettings updateEmailSettings(
             @PathVariable Long id,
             @RequestBody String email
