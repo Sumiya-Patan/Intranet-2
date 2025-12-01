@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/emailSettings")
@@ -29,9 +30,17 @@ public class EmailSettingsController {
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public EmailSettings updateEmailSettings(
             @PathVariable Long id,
-            @RequestBody String email
+            @RequestBody Map<String, String> requestBody
     ) {
+
+        String email = requestBody.get("email");
+
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email field is required");
+        }
+
         return emailSettingsService.updateEmailSettings(id, email);
     }
+
 
 }

@@ -17,13 +17,13 @@ public class InternalProject {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;  // Primary key
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false)
     private Integer projectId;  // Internal project name
 
     @Column(nullable = false, length = 100)
     private String  projectName;  // Internal project name
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false)
     private Integer taskId;  // Manager of the internal project
 
     @Column(nullable = false, length = 100)
