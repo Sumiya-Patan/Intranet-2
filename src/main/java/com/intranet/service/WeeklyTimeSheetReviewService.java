@@ -81,10 +81,9 @@ public class WeeklyTimeSheetReviewService {
     map.put("holidayId", h.getHolidayId());
     map.put("holidayName", h.getHolidayName());
     map.put("holidayDate", h.getHolidayDate().toString());
-    map.put("isLeave", !h.isLeave());  
+    map.put("isLeave", h.isLeave());  
     map.put("description", h.getHolidayDescription());
     map.put("submitTimesheet", h.isSubmitTimesheet());
-
     return map;
 }
 
@@ -241,6 +240,15 @@ public class WeeklyTimeSheetReviewService {
                 .anyMatch(ts -> ts.getWorkDate().equals(date));
 
         if (!alreadyExists) {
+             Map<String, Object> holiday = holidayMap.get(date);
+            boolean isLeave = holiday.get("isLeave") instanceof Boolean &&
+                            (Boolean) holiday.get("isLeave");
+
+            // Apply your rules
+            BigDecimal hours = isLeave ?
+                    BigDecimal.valueOf(8) : // Leave
+                    BigDecimal.ZERO;        
+
             TimeSheet newSheet = new TimeSheet();
             newSheet.setUserId(userId);
             newSheet.setWeekInfo(commonWeek);
@@ -252,7 +260,7 @@ public class WeeklyTimeSheetReviewService {
         //         newSheet.setHoursWorked(BigDecimal.ZERO); // weekend → 0 hrs
         //         break;
         //     default:
-                newSheet.setHoursWorked(BigDecimal.valueOf(8)); // Mon–Fri → 8 hrs
+                newSheet.setHoursWorked(hours); // Mon–Fri → 8 hrs
         // }
             newSheet.setStatus(TimeSheet.Status.APPROVED);
             newSheet.setEntries(Collections.emptyList());
