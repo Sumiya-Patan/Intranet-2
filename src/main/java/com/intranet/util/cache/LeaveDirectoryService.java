@@ -142,7 +142,7 @@ public class LeaveDirectoryService {
         if (hasPending) {
             throw new IllegalStateException(
                     "You have PENDING leaves in " + month + "/" + year +
-                            ". All leaves must be APPROVED before generating the report."
+                            ". All leaves must be reviewed before generating the report."
             );
         }
         System.out.println("------------------------");
