@@ -68,7 +68,7 @@ public class LeaveDirectoryService {
         headers.set("Authorization", authHeader);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        String url = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d", lmsBaseUrl, userId,year, month);
+        String url = String.format("%s/api/leave-requests/getLeaveRequests/%d?year=%d&month=%d", lmsBaseUrl, userId,year, month);
 
         try {
 
@@ -103,7 +103,7 @@ public class LeaveDirectoryService {
     headers.set("Authorization", authHeader);
     HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-    String url = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d",
+    String url = String.format("%s/api/leave-requests/getLeaveRequests/%d?year=%d&month=%d",
             lmsBaseUrl, userId, year, month);
 
     try {

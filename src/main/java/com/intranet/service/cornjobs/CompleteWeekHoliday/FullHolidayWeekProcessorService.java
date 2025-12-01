@@ -2,10 +2,12 @@ package com.intranet.service.cornjobs.CompleteWeekHoliday;
 
 import com.intranet.dto.HolidayDTO;
 import com.intranet.dto.lms.LeaveDTO;
+import com.intranet.entity.CronJobExecutionLog;
 import com.intranet.entity.HolidayExcludeUsers;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
+import com.intranet.repository.CronJobExecutionLogRepo;
 import com.intranet.repository.HolidayExcludeUsersRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.WeekInfoRepo;
@@ -45,6 +47,8 @@ public class FullHolidayWeekProcessorService {
     private final TimeSheetRepo timeSheetRepo;
     private final WeeklyTimeSheetReviewRepo weeklyReviewRepo;
 
+    private final CronJobExecutionLogRepo cronJobExecutionLogRepository;
+
     private final EmailUtil emailUtil;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -58,6 +62,15 @@ public class FullHolidayWeekProcessorService {
 
     @Transactional
     public void processMonth() {
+
+        CronJobExecutionLog logEntry = CronJobExecutionLog.builder()
+            .jobName("FullHolidayWeekProcessorService")
+            .startTime(LocalDateTime.now())
+            .status(CronJobExecutionLog.Status.RUNNING)
+            .message("Execution started")
+            .build();
+
+       logEntry = cronJobExecutionLogRepository.save(logEntry);
 
         LocalDate currentMonth = LocalDate.now();
         LocalDate previousMonth = currentMonth.minusMonths(1);
@@ -129,8 +142,20 @@ public class FullHolidayWeekProcessorService {
                 autoGenerateTimesheets(userId, week, weekDates);
                 createWeeklyReview(userId, week);
             }
+
+        logEntry.setEndTime(LocalDateTime.now());
+        logEntry.setStatus(CronJobExecutionLog.Status.SUCCESS);
+        logEntry.setMessage("Process completed successfully");
+        cronJobExecutionLogRepository.save(logEntry);
+
         }
         } catch (Exception e) {
+        
+        logEntry.setEndTime(LocalDateTime.now());
+        logEntry.setStatus(CronJobExecutionLog.Status.FAILED);
+        logEntry.setMessage(e.getMessage());
+        cronJobExecutionLogRepository.save(logEntry);
+        
             System.err.println("⚠ Error in FullHolidayWeekProcessorService: " + e.getMessage());
             try {
                 emailUtil.sendEmail(timesheetUser,"⚠ Error in FullHolidayWeekProcessorService", e.getMessage());

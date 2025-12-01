@@ -310,7 +310,7 @@ public class HolidayExcludeUsersService {
         List<HolidayDTO> weekendHolidays = generateWeekendHolidays(month);
 
         // / API: /api/leave-requests/getLeaveRequests/{userId}/{year}/{month}
-    String leaveUrl = String.format("%s/api/leave-requests/getLeaveRequests/%d/%d/%d", lmsBaseUrl, userId, year, month);
+    String leaveUrl = String.format("%s/api/leave-requests/getLeaveRequests/%d?year=%d&month=%d", lmsBaseUrl, userId, year, month);
     List<Map<String, Object>> leaveData = Collections.emptyList();
     try {
         ResponseEntity<Map<String, Object>> leaveResp = restTemplate.exchange(

@@ -9,12 +9,15 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.intranet.entity.CronJobExecutionLog;
+import com.intranet.repository.CronJobExecutionLogRepo;
 import com.intranet.service.WeekInfoService;
 import com.intranet.util.EmailUtil;
 
 import jakarta.mail.MessagingException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Component
@@ -23,6 +26,7 @@ public class WeekInfoScheduler {
 
     private final WeekInfoService weekInfoService;
     private final EmailUtil emailUtil;
+    private final CronJobExecutionLogRepo cronJobExecutionLogRepo;
 
     @Value("${timesheet.user}")
     private String adminEmail;
@@ -69,6 +73,15 @@ public class WeekInfoScheduler {
 
         log.info("🕒 Starting WeekInfo generation next months...");
 
+        CronJobExecutionLog logEntry = CronJobExecutionLog.builder()
+            .jobName("GenerateWeeksForNextMonth")
+            .startTime(LocalDateTime.now())
+            .status(CronJobExecutionLog.Status.RUNNING)
+            .message("Execution started")
+            .build();
+
+            cronJobExecutionLogRepo.save(logEntry);
+
             LocalDate targetMonth = now.plusMonths(1);
 
             int year = targetMonth.getYear();
@@ -78,10 +91,20 @@ public class WeekInfoScheduler {
 
             try {
                 weekInfoService.generateWeeksForMonth(year, month);
+                logEntry.setEndTime(LocalDateTime.now());
+                logEntry.setStatus(CronJobExecutionLog.Status.SUCCESS);
+                logEntry.setMessage("Generated successfully");
+                cronJobExecutionLogRepo.save(logEntry);
             } 
             catch (Exception e) {
                 log.error("❌ Error generating WeekInfo for {}/{}: {}", month, year, e.getMessage());
-                
+
+                logEntry.setEndTime(LocalDateTime.now());
+                logEntry.setStatus(CronJobExecutionLog.Status.FAILED);
+                logEntry.setMessage(e.getMessage());
+                cronJobExecutionLogRepo.save(logEntry);
+
+
                     String subject = String.format(
                     "Error generating WeekInfo for %d/%d: %s",
                     month, year, e.getMessage()
