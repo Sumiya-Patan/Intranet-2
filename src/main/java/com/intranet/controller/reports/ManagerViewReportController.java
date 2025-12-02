@@ -37,6 +37,17 @@ public class ManagerViewReportController {
             HttpServletRequest req
     ) {
 
+        LocalDate now = LocalDate.now();
+        // Validate future or same month/year selection
+        if (year > now.getYear() ||
+        (year == now.getYear() && month >= now.getMonthValue())) {
+
+            // prevent future OR current month processing
+            return ResponseEntity.badRequest()
+                .body("You cannot select the current or future month.");
+        }
+
+
         String token = req.getHeader("Authorization");
         if (token == null || token.isBlank()) {
             return ResponseEntity.badRequest().body("Authorization token is missing");

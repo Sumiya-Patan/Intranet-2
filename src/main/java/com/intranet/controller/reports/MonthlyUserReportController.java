@@ -8,6 +8,8 @@ import com.intranet.service.MonthlyUserReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
+import java.time.LocalDate;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +36,17 @@ public class MonthlyUserReportController {
             month = java.time.LocalDate.now().getMonthValue();
             year = java.time.LocalDate.now().getYear();
         }
+
+        LocalDate now = LocalDate.now();
+        // Validate future or same month/year selection
+        if (year > now.getYear() ||
+        (year == now.getYear() && month >= now.getMonthValue())) {
+
+            // prevent future OR current month processing
+            return ResponseEntity.badRequest()
+                .body("You cannot select the current or future month.");
+        }
+        
         MonthlyUserReportDTO report = reportService.getMonthlyUserReport(currentUser.getId(), month, year);
         return ResponseEntity.ok(report);
         } 
