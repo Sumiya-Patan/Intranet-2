@@ -5,6 +5,7 @@ import com.intranet.entity.EmailSettings;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.cornjobs.AutoFinanceReport.EmailSettingsService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,12 +23,14 @@ public class EmailSettingsController {
     private final EmailSettingsService emailSettingsService;
 
     @GetMapping
+    @Operation(summary = "Get all email settings")
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public List<EmailSettings> getAllEmailSettings() {
         return emailSettingsService.getAllEmailSettings();
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Update email settings")
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public EmailSettings updateEmailSettings(
             @CurrentUser UserDTO user,

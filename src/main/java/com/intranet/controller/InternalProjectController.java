@@ -26,7 +26,7 @@ public class InternalProjectController {
         try{
             service.createInternalTask(taskName);
             return ResponseEntity.ok("Internal Project created successfully");
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
@@ -46,6 +46,7 @@ public class InternalProjectController {
 
     // UPDATE
     @PutMapping("/{id}")
+    @Operation(summary = "Update Internal Project")
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public ResponseEntity<?> update(
             @PathVariable Long id,
@@ -56,7 +57,7 @@ public class InternalProjectController {
         try{
             service.updateInternalTask(id, taskName);
             return ResponseEntity.ok("Internal Project updated successfully");
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
             return ResponseEntity.badRequest().body("Failed to update Internal Project");
         }
     }
