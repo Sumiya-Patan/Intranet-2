@@ -18,11 +18,14 @@ public class EmailSettingsService {
         return emailSettingsRepository.findAll();
     }
 
-    public EmailSettings updateEmailSettings(Long id, String email) {
+    public EmailSettings updateEmailSettings(Long id, String email, Long employeeId, String employeeName) {
     return emailSettingsRepository.findById(id)
         .map(existing -> {
             if (email != null && !email.isEmpty()) {
                 existing.setEmail(email);
+                existing.setEmployeeid(employeeId);
+                existing.setEmployeeName(employeeName);
+                // existing.setUpdatedAt(LocalDateTime.now());
             }
             // Do NOT change reason since only email is updated
             return emailSettingsRepository.save(existing);

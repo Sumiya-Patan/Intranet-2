@@ -19,4 +19,10 @@ public class EmailSettings {
 
     @Column(nullable = true)
     private String reason;
+
+    @Column(nullable = false)
+    private Long employeeid;
+
+    @Column(nullable = false)
+    private String employeeName;
 }

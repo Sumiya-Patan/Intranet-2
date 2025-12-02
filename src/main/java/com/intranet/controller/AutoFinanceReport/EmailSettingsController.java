@@ -1,7 +1,11 @@
 package com.intranet.controller.AutoFinanceReport;
 
+import com.intranet.dto.UserDTO;
 import com.intranet.entity.EmailSettings;
+import com.intranet.security.CurrentUser;
 import com.intranet.service.cornjobs.AutoFinanceReport.EmailSettingsService;
+
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -12,13 +16,10 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/emailSettings")
 @CrossOrigin(origins = "*",allowedHeaders = "*")
+@RequiredArgsConstructor
 public class EmailSettingsController {
 
     private final EmailSettingsService emailSettingsService;
-
-    public EmailSettingsController(EmailSettingsService emailSettingsService) {
-        this.emailSettingsService = emailSettingsService;
-    }
 
     @GetMapping
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
@@ -29,6 +30,7 @@ public class EmailSettingsController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public EmailSettings updateEmailSettings(
+            @CurrentUser UserDTO user,
             @PathVariable Long id,
             @RequestBody Map<String, String> requestBody
     ) {
@@ -39,7 +41,7 @@ public class EmailSettingsController {
             throw new IllegalArgumentException("Email field is required");
         }
 
-        return emailSettingsService.updateEmailSettings(id, email);
+        return emailSettingsService.updateEmailSettings(id, email, user.getId(), user.getName());
     }
 
 
