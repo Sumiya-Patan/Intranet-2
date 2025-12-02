@@ -1,12 +1,14 @@
 package com.intranet.controller;
 
-import com.intranet.entity.InternalProject;
 import com.intranet.service.InternalProjectService;
+
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/internal-projects")
@@ -16,31 +18,49 @@ public class InternalProjectController {
     private final InternalProjectService service;
 
     // CREATE
-    @PostMapping
-    public ResponseEntity<InternalProject> create(@RequestBody InternalProject project) {
-        return ResponseEntity.ok(service.createProject(project));
+    @PostMapping("/create")
+    @Operation(summary = "Create Internal Project")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
+    public ResponseEntity<?> create(@RequestBody Map<String, String> body) {
+        String taskName = body.get("taskName");
+        try{
+            service.createInternalTask(taskName);
+            return ResponseEntity.ok("Internal Project created successfully");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
+
 
     // READ ALL
-    @GetMapping
-    public ResponseEntity<List<InternalProject>> getAll() {
-        return ResponseEntity.ok(service.getAllProjects());
-    }
-
-    // READ BY ID
-    @GetMapping("/{id}")
-    public ResponseEntity<InternalProject> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getProjectById(id));
+    @GetMapping("/all")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
+    @Operation(summary = "Get all Internal Projects")
+    public ResponseEntity<?> getAll() {
+        try{
+            return ResponseEntity.ok(service.getAllProjects());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Failed to fetch Internal Projects");
+        }
     }
 
     // UPDATE
     @PutMapping("/{id}")
-    public ResponseEntity<InternalProject> update(
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
+    public ResponseEntity<?> update(
             @PathVariable Long id,
-            @RequestBody InternalProject project
+            @RequestBody Map<String, String> requestBody
     ) {
-        return ResponseEntity.ok(service.updateProject(id, project));
+        String taskName = requestBody.get("taskName");
+
+        try{
+            service.updateInternalTask(id, taskName);
+            return ResponseEntity.ok("Internal Project updated successfully");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Failed to update Internal Project");
+        }
     }
+
 
     // DELETE
     @DeleteMapping("/{id}")

@@ -14,35 +14,55 @@ public class InternalProjectService {
 
     private final InternalProjectRepo repository;
 
-    // CREATE
-    public InternalProject createProject(InternalProject project) {
-        return repository.save(project);
+  public InternalProject createInternalTask(String taskName) {
+
+    if (taskName == null || taskName.trim().isEmpty()) {
+        throw new IllegalArgumentException("Task name cannot be empty");
+    }
+
+    // Get latest negative task ID
+    Integer latestTaskId = repository.findTopByOrderByTaskIdAsc()
+            .map(InternalProject::getTaskId)
+            .orElse(0);
+
+    // Generate next negative taskId
+    int newTaskId = latestTaskId > 0 ? -1 : latestTaskId - 1;
+
+    // Ensure uniqueness - regenerate if duplicate
+    while (repository.existsByTaskId(newTaskId)) {
+        newTaskId--; // reduce further into negative space
+    }
+
+    InternalProject project = new InternalProject();
+    project.setProjectId(-1);
+    project.setProjectName("Internal Activities");
+    project.setTaskId(newTaskId);
+    project.setTaskName(taskName);
+    project.setBillable(false);
+
+    return repository.save(project);
     }
 
     // READ ALL
     public List<InternalProject> getAllProjects() {
         return repository.findAll();
     }
+    
+    public InternalProject updateInternalTask(Long id, String taskName) {
 
-    // READ BY ID
-    public InternalProject getProjectById(Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Internal Project not found with id: " + id));
+    if (taskName == null || taskName.trim().isEmpty()) {
+        throw new IllegalArgumentException("Task name cannot be empty");
     }
 
-    // UPDATE
-    public InternalProject updateProject(Long id, InternalProject updatedProject) {
-        return repository.findById(id)
-                .map(existing -> {
-                    existing.setProjectId(updatedProject.getProjectId());
-                    existing.setProjectName(updatedProject.getProjectName());
-                    existing.setTaskId(updatedProject.getTaskId());
-                    existing.setTaskName(updatedProject.getTaskName());
-                    existing.setBillable(updatedProject.isBillable());
-                    return repository.save(existing);
-                })
-                .orElseThrow(() -> new RuntimeException("Internal Project not found with id: " + id));
+    return repository.findById(id)
+            .map(existing -> {
+                existing.setTaskName(taskName);
+                return repository.save(existing);
+            })
+            .orElseThrow(() ->
+                    new RuntimeException("Internal Project not found with id: " + id));
     }
+
 
     // DELETE
     public String deleteProject(Long id) {
