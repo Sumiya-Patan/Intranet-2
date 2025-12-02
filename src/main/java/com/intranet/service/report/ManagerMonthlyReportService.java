@@ -264,6 +264,7 @@ public class ManagerMonthlyReportService {
         result.put("pending", pending.get("count"));
         result.put("pendingUsers", pending.get("users"));
         result.put("dateRange", buildDateRange(startDate, endDate));
+        result.put("expectedHours",monthlyhrs);
         result.put("weeklySummary", weekSummary);
         result.put("missingTimesheets", missing);
         result.put("uniqueProjectCount", uniqueProjectCount);
