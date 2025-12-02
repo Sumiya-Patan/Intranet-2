@@ -66,4 +66,45 @@ public class UserDirectoryService {
             return Collections.emptyMap();
         }
     }
+
+    public List<Map<String, Object>> fetchAllUsers2(String authHeader) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", authHeader);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        String umsUrl = String.format("%s/admin/users?page=1&limit=500", umsBaseUrl);
+
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    umsUrl, HttpMethod.GET, entity,
+                    new ParameterizedTypeReference<>() {}
+            );
+
+            Map<String, Object> body = response.getBody();
+            if (body == null || !body.containsKey("users")) return List.of();
+
+            List<Map<String, Object>> users = (List<Map<String, Object>>) body.get("users");
+
+            return users.stream()
+                    .map(u -> {
+                        Long id = ((Number) u.get("user_id")).longValue();
+                        String firstName = (String) u.getOrDefault("first_name", "");
+                        String lastName = (String) u.getOrDefault("last_name", "");
+                        String fullName = (firstName + " " + lastName).trim();
+                        String email = (String) u.getOrDefault("mail", "unknown@example.com");
+
+                        Map<String, Object> userMap = new HashMap<>();
+                        userMap.put("id", id);
+                        userMap.put("name", fullName.isEmpty() ? "Unknown User" : fullName);
+                        userMap.put("email", email);
+                        return userMap;
+                    })
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to fetch users from UMS: " + e.getMessage());
+            return List.of();
+        }
+        }
+
 }
