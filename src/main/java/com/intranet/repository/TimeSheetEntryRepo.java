@@ -1,5 +1,6 @@
 package com.intranet.repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -42,4 +43,29 @@ List<TimeSheetEntry> findByTimeSheetId(Long timeSheetId);
                                    @Param("excludeId") Long excludeId);
                                    
     List<TimeSheetEntry> findByTimeSheet_IdOrderByFromTimeAsc(Long timesheetId);
+
+
+    @Query("""
+        SELECT e.taskId, SUM(e.hoursWorked)
+        FROM TimeSheetEntry e
+        WHERE e.projectId = :projectId
+          AND e.timeSheet.userId = :userId
+        GROUP BY e.taskId
+    """)
+    List<Object[]> findTaskDurationsByProjectAndUser(Long projectId, Long userId);
+
+    @Query("""
+        SELECT e.taskId, SUM(e.hoursWorked)
+        FROM TimeSheetEntry e
+        WHERE e.projectId = :projectId
+          AND e.timeSheet.userId = :userId
+          AND e.timeSheet.workDate BETWEEN :startDate AND :endDate
+        GROUP BY e.taskId
+    """)
+    List<Object[]> findTaskDurationsByProjectAndUserAndDateRange(
+            Long projectId,
+            Long userId,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 }
