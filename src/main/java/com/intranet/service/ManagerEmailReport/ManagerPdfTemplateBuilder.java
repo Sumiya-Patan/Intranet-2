@@ -45,6 +45,8 @@ public class ManagerPdfTemplateBuilder {
             endDateStr   = safeToString(e);
         }
 
+        String expectedHoursStr = safeToString(get(report, "expectedHours"));
+
         Map<String, Object> weeklySummary = safeCastMap(get(report, "weeklySummary"));
         List<?> pendingUsers = safeCastList(get(report, "pendingUsers"));
         List<?> projectBreakdown = safeCastList(get(report, "projectBreakdown"));
@@ -287,9 +289,9 @@ public class ManagerPdfTemplateBuilder {
         html.append("<div class=\"section no-break\">");
         html.append("<h2>Insights</h2>");
 
-        appendInsightTable(html, "Underutilized Employees", underutilized, "totalHours");
-        appendInsightTable(html, "Overworked Employees", overworked, "totalHours");
-        appendInsightTable(html, "Multi-Project Workers", multiProject, "projectCount");
+        appendInsightTable(html, "Underutilized Employees", underutilized, "totalHours",expectedHoursStr);
+        appendInsightTable(html, "Overworked Employees", overworked, "totalHours",expectedHoursStr);
+        appendInsightTableMulti(html, "Multi-Project Workers", multiProject, "projectCount");
 
         html.append("</div>");
 
@@ -541,7 +543,32 @@ public class ManagerPdfTemplateBuilder {
         html.append("</table>");
     }
 
-    private void appendInsightTable(StringBuilder html, String title, List<?> list, String metricField) {
+    private void appendInsightTable(StringBuilder html, String title, List<?> list, String metricField,String expectedHours) {
+         html.append("<h3>")
+            .append(esc(title));
+
+        if (expectedHours != null && !expectedHours.isBlank()) {
+            html.append(" <span class=\"small\">(Expected Hours: ")
+                .append(esc(expectedHours))
+                .append(")</span>");
+        }
+
+        html.append("</h3>");
+        if (list == null || list.isEmpty()) {
+            html.append("<p class=\"muted\">None</p>");
+            return;
+        }
+        html.append("<table><tr><th>User</th><th>User ID</th><th>").append(esc(metricField)).append("</th></tr>");
+        for (Object item : list) {
+            String name = safeGetAsString(item, "userName");
+            String id   = safeGetAsString(item, "userId");
+            String metric = safeGetAsString(item, metricField);
+            html.append("<tr><td>").append(esc(name)).append("</td><td>").append(esc(id)).append("</td><td>")
+                .append(esc(metric)).append("</td></tr>");
+        }
+        html.append("</table>");
+    }
+    private void appendInsightTableMulti(StringBuilder html, String title, List<?> list, String metricField) {
         html.append("<h3>").append(esc(title)).append("</h3>");
         if (list == null || list.isEmpty()) {
             html.append("<p class=\"muted\">None</p>");

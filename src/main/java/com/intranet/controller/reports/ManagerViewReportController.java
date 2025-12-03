@@ -67,6 +67,7 @@ public class ManagerViewReportController {
             Map<String, Object> report =
                     managerMonthlyReportService.generateManagerMonthlyReport(
                             currentUser.getId(),
+                            currentUser.getName(),
                             startDate,
                             endDate,
                             month,
