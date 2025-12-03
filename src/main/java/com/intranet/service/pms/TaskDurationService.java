@@ -7,7 +7,9 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.intranet.dto.pms.ProjectUserRequestDTO;
 import com.intranet.dto.pms.TaskDurationDTO;
+import com.intranet.dto.pms.TaskDurationResponseDTO;
 import com.intranet.repository.TimeSheetEntryRepo;
 
 import lombok.RequiredArgsConstructor;
@@ -70,4 +72,58 @@ public class TaskDurationService {
         return response;
     }
 
+    public List<TaskDurationResponseDTO> getTaskDurationsForUsers(ProjectUserRequestDTO dto) {
+
+        List<TaskDurationResponseDTO> responseList = new ArrayList<>();
+
+        for (Long userId : dto.getUserIds()) {
+
+            List<Object[]> results =
+                    repository.findTaskDurationsByProjectAndUser(dto.getProjectId(), userId);
+
+            List<TaskDurationDTO> taskDurations = new ArrayList<>();
+
+            for (Object[] row : results) {
+                Long taskId = (Long) row[0];
+                BigDecimal totalHours = (BigDecimal) row[1];
+
+                String duration = convertHoursToHHMM(totalHours);
+
+                taskDurations.add(new TaskDurationDTO(taskId, duration));
+            }
+
+            responseList.add(new TaskDurationResponseDTO(userId, taskDurations));
+        }
+        return responseList;
+    }
+
+
+    public List<TaskDurationResponseDTO> getTaskDurationsForUsersWithDateRange(ProjectUserRequestDTO dto, LocalDate startDate, LocalDate endDate) {
+
+        List<TaskDurationResponseDTO> responseList = new ArrayList<>();
+
+        for (Long userId : dto.getUserIds()) {
+
+            List<Object[]> results =
+                    repository.findTaskDurationsByUserProjectAndDateRange(
+                            userId,
+                            dto.getProjectId(),
+                            startDate,
+                            endDate
+                    );
+
+            List<TaskDurationDTO> taskDurations = new ArrayList<>();
+
+            for (Object[] row : results) {
+                Long taskId = (Long) row[0];
+                BigDecimal totalHours = (BigDecimal) row[1];
+
+                String duration = convertHoursToHHMM(totalHours);
+                taskDurations.add(new TaskDurationDTO(taskId, duration));
+            }
+
+            responseList.add(new TaskDurationResponseDTO(userId, taskDurations));
+        }
+        return responseList;
+    }
 }

@@ -68,4 +68,19 @@ List<TimeSheetEntry> findByTimeSheetId(Long timeSheetId);
             LocalDate startDate,
             LocalDate endDate
     );
+
+    @Query("""
+        SELECT e.taskId, SUM(e.hoursWorked)
+        FROM TimeSheetEntry e
+        WHERE e.projectId = :projectId
+          AND e.timeSheet.userId = :userId
+          AND e.timeSheet.workDate BETWEEN :startDate AND :endDate
+        GROUP BY e.taskId
+    """)
+    List<Object[]> findTaskDurationsByUserProjectAndDateRange(
+            Long userId,
+            Long projectId,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 }
