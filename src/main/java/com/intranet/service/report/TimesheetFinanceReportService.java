@@ -616,7 +616,7 @@ public class TimesheetFinanceReportService {
 
        
          if ("PENDING".equalsIgnoreCase(leave.getStatus())) {
-            throw new IllegalStateException("Leave is still pending needs the approval.");
+            throw new IllegalStateException("Leave is still pending needs review for Employee Id " + leave.getEmployeeId() + " at " + leave.getStartDate()+".");
         }
 
         // ✔ Skip non-approved leaves

@@ -431,7 +431,7 @@ public class TimeSheetReviewService {
         // --------------------------------------------------------
         for (TimeSheet ts : sheets) {
 
-            if (ts.getStatus() != TimeSheet.Status.APPROVED || ts.getStatus() != TimeSheet.Status.REJECTED) {
+            if (ts.getStatus() == TimeSheet.Status.APPROVED || ts.getStatus() == TimeSheet.Status.REJECTED) {
                 throw new IllegalArgumentException("Timesheet already reviewed.");
             }
 
