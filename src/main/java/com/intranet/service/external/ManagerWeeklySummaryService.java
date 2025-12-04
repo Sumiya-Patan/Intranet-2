@@ -216,8 +216,8 @@ public class ManagerWeeklySummaryService {
                         weekStatus = "APPROVED";
                         } else if (statuses.size() == 1 && statuses.contains("SUBMITTED")) {
                         weekStatus = "SUBMITTED";
-                        } else if (statuses.contains("APPROVED") || statuses.contains("SUBMITTED")) {
-                        weekStatus = "SUBMITTED";
+                        } else if (statuses.contains("APPROVED") && statuses.contains("SUBMITTED")) {
+                        weekStatus = "PARTIALLY_APPROVED";
                         } else {
                         weekStatus = "SUBMITTED"; // default fallback
                         }
@@ -481,8 +481,8 @@ private TimeSheetSummaryDTO mapToSummaryDTOForManager(TimeSheet ts, Long manager
                         weekStatus = "APPROVED";
                         } else if (statuses.size() == 1 && statuses.contains("SUBMITTED")) {
                         weekStatus = "SUBMITTED";
-                        } else if (statuses.contains("APPROVED") || statuses.contains("SUBMITTED")) {
-                        weekStatus = "SUBMITTED";
+                        } else if (statuses.contains("APPROVED") && statuses.contains("SUBMITTED")) {
+                        weekStatus = "PARTIALLY_APPROVED";
                         } else {
                         weekStatus = "SUBMITTED"; // default fallback
                         }
