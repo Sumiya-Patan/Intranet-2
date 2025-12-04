@@ -267,7 +267,7 @@ public class TimeSheetReviewService {
 
         if (anyRejected) return TimeSheet.Status.REJECTED;
         else if (allApproved) return TimeSheet.Status.APPROVED;
-        else if (anyApproved || !allReviewed) return TimeSheet.Status.PARTIALLY_APPROVED;
+        else if (anyApproved) return TimeSheet.Status.PARTIALLY_APPROVED;
         else return TimeSheet.Status.SUBMITTED;
     }
 
