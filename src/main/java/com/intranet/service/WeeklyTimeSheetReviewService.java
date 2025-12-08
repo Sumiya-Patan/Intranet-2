@@ -388,7 +388,7 @@ public class WeeklyTimeSheetReviewService {
                 }
 
                 // ✅ Step 3: Fetch project details from PMS
-                String pmsUrl = String.format("%s/projects", pmsBaseUrl);
+                String pmsUrl = String.format("%s/projects/tms", pmsBaseUrl);
                 ResponseEntity<List<Map<String, Object>>> pmsResponse = restTemplate.exchange(
                         pmsUrl, HttpMethod.GET, entity, new ParameterizedTypeReference<>() {});
                 List<Map<String, Object>> allProjects = Optional.ofNullable(pmsResponse.getBody()).orElse(List.of());

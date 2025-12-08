@@ -31,7 +31,7 @@ public class ProjectDirectoryService {
         headers.set("Authorization", authHeader);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        String pmsUrl = String.format("%s/projects", pmsBaseUrl);
+        String pmsUrl = String.format("%s/projects/tms", pmsBaseUrl);
 
         try {
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(

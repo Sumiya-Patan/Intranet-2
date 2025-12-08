@@ -123,7 +123,7 @@ public class DashboardService {
     private Map<Long, String> fetchProjectMap() {
         try {
             ResponseEntity<List<Map<String, Object>>> resp = restTemplate.exchange(
-                    pmsBaseUrl + "/projects",
+                    pmsBaseUrl + "/projects/tms",
                     HttpMethod.GET,
                     buildEntityWithAuth(),
                     new ParameterizedTypeReference<List<Map<String, Object>>>() {}

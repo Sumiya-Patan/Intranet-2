@@ -227,7 +227,7 @@ public class TimeSheetReviewService {
     /** Fetch all PMS projects to identify each project's owner (manager) */
     private List<Map<String, Object>> fetchAllProjects() {
         try {
-            String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+            String projectsUrl = String.format("%s/projects/tms", pmsBaseUrl);
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     projectsUrl,
                     HttpMethod.GET,

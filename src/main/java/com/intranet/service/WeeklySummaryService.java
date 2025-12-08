@@ -93,7 +93,7 @@ public class WeeklySummaryService {
         }
 
         // 🔹 Step 1: Call PMS to get all projects
-        String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+        String projectsUrl = String.format("%s/projects/tms", pmsBaseUrl);
         ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 projectsUrl,
                 HttpMethod.GET,
@@ -332,7 +332,7 @@ public class WeeklySummaryService {
         }
 
         // 🔹 Step 1: Call PMS to get all projects
-        String projectsUrl = String.format("%s/projects", pmsBaseUrl);
+        String projectsUrl = String.format("%s/projects/tms", pmsBaseUrl);
         ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 projectsUrl,
                 HttpMethod.GET,
