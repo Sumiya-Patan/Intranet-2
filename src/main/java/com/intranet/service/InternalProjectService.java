@@ -74,7 +74,7 @@ public class InternalProjectService {
 
             // Step 1: Validate project exists
             InternalProject project = repository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Internal Project not found with id: " + id));
+                    .orElseThrow(() -> new IllegalArgumentException("Internal Project not found"));
 
             Integer projectId = project.getProjectId();
             Integer taskId = project.getTaskId();
@@ -86,7 +86,7 @@ public class InternalProjectService {
             if (existsInTimeSheet) {
                 throw new IllegalArgumentException(
                         String.format(
-                                "Cannot delete Internal Project because task is  already used in Timesheet entries."));
+                                "Cannot delete Internal Project because task is  already logged  in Timesheet entries."));
             }
             // Step 3: Safe delete
             repository.deleteById(id);
