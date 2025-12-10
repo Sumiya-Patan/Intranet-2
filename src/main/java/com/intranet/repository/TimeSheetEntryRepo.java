@@ -83,4 +83,5 @@ List<TimeSheetEntry> findByTimeSheetId(Long timeSheetId);
             LocalDate startDate,
             LocalDate endDate
     );
+    boolean existsByProjectIdAndTaskId(Integer projectId, Integer taskId);
 }

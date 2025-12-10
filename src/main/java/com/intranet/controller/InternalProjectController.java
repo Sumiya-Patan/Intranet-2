@@ -66,6 +66,11 @@ public class InternalProjectController {
     // DELETE
     @DeleteMapping("/{id}")
     public ResponseEntity<String> delete(@PathVariable Long id) {
+        try {
         return ResponseEntity.ok(service.deleteProject(id));
+        }
+        catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }

@@ -2,9 +2,11 @@ package com.intranet.service;
 
 import com.intranet.entity.InternalProject;
 import com.intranet.repository.InternalProjectRepo;
+import com.intranet.repository.TimeSheetEntryRepo;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -13,6 +15,8 @@ import java.util.List;
 public class InternalProjectService {
 
     private final InternalProjectRepo repository;
+
+    private final TimeSheetEntryRepo timeSheetEntryRepo;
 
   public InternalProject createInternalTask(String taskName) {
 
@@ -65,11 +69,29 @@ public class InternalProjectService {
 
 
     // DELETE
-    public String deleteProject(Long id) {
-        if (!repository.existsById(id)) {
-            throw new RuntimeException("Internal Project not found with id: " + id);
-        }
-        repository.deleteById(id);
-        return "Internal Project deleted successfully";
-    }
+    @Transactional
+        public String deleteProject(Long id) {
+
+            // Step 1: Validate project exists
+            InternalProject project = repository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Internal Project not found with id: " + id));
+
+            Integer projectId = project.getProjectId();
+            Integer taskId = project.getTaskId();
+
+            // Step 2: Check if this (projectId + taskId) combination is used in timesheets
+            boolean existsInTimeSheet = timeSheetEntryRepo
+                    .existsByProjectIdAndTaskId(projectId, taskId);
+
+            if (existsInTimeSheet) {
+                throw new IllegalArgumentException(
+                        String.format(
+                                "Cannot delete Internal Project because task is  already used in Timesheet entries."));
+            }
+            // Step 3: Safe delete
+            repository.deleteById(id);
+
+            return "Internal Project deleted successfully";
+}
+
 }
