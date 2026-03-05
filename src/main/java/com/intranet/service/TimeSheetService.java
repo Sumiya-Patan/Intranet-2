@@ -403,12 +403,26 @@ public class TimeSheetService {
         if (response.getBody() == null) {
             return Collections.emptyList();
         }
-
+        
         // Only keep projects where given user is a member
-        List<Map<String, Object>> filteredProjects = ((List<Map<String, Object>>) response.getBody()).stream()
-                .filter(p -> ((List<Map<String, Object>>) p.get("members")).stream()
-                        .anyMatch(m -> Objects.equals(((Number) m.get("id")).longValue(), userId)))
-                .toList();
+        List<Map<String, Object>> filteredProjects =
+                ((List<Map<String, Object>>) response.getBody())
+                        .stream()
+                        .filter(p -> {
+                            List<Map<String, Object>> members =
+                                    (List<Map<String, Object>>) p.get("members");
+
+                            if (members == null) {
+                                return false;
+                            }
+
+                            return members.stream()
+                                    .anyMatch(m -> Objects.equals(
+                                            ((Number) m.get("id")).longValue(),
+                                            userId
+                                    ));
+                        })
+                        .toList();
 
         // Group by manager
         Map<Long, List<Map<String, Object>>> projectsByManager = filteredProjects.stream()

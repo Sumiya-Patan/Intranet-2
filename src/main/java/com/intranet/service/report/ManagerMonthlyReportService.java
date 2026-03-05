@@ -75,7 +75,9 @@ public class ManagerMonthlyReportService {
         // ------------------------------
         // 1️⃣ Fetch Manager Projects
         // ------------------------------
-        String url = pmsBaseUrl + "/projects/owner/period?month=" + month + "&year=" + year;
+
+        String formattedMonth = String.format("%02d", month);
+        String url = pmsBaseUrl + "/projects/owner/period?month=" + formattedMonth + "&year=" + year;
 
         ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url,
