@@ -65,6 +65,8 @@ public class InternalProjectController {
 
     // DELETE
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete Internal Project")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public ResponseEntity<String> delete(@PathVariable Long id) {
         try {
         return ResponseEntity.ok(service.deleteProject(id));
