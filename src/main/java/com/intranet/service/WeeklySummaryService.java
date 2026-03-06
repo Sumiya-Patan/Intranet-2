@@ -318,8 +318,11 @@ public class WeeklySummaryService {
         LocalDate startOfMonth = startDate;
         LocalDate endOfMonth = endDate;
 
+        // List<WeekInfo> weeks = weekInfoRepo
+        //         .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(startOfMonth, endOfMonth);
+
         List<WeekInfo> weeks = weekInfoRepo
-                .findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(startOfMonth, endOfMonth);
+        .findByStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(endDate, startDate);
 
         List<Long> weekIds = weeks.stream().map(WeekInfo::getId).collect(Collectors.toList());
         List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(userId, weekIds);

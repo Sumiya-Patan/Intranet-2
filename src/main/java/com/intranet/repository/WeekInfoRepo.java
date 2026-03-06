@@ -19,4 +19,8 @@ public interface WeekInfoRepo extends JpaRepository<WeekInfo, Long>{
     List<WeekInfo> findByStartDateGreaterThanEqualAndEndDateLessThanEqualOrderByStartDateAsc(LocalDate start, LocalDate end);
     List<WeekInfo> findByStartDateBetween(LocalDate startDate, LocalDate endDate);
     List<WeekInfo> findByMonthAndYear(Integer month, Integer year);
+    List<WeekInfo> findByStartDateLessThanEqualAndEndDateGreaterThanEqualOrderByStartDateAsc(
+        LocalDate endDate,
+        LocalDate startDate
+    );
 }
