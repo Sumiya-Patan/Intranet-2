@@ -14,6 +14,7 @@ public class TimeSheetSummaryDTO {
     private String status;
     private Boolean isHolidayTimesheet;
     private Boolean defaultHolidayTimesheet;
+    private Boolean isLeaveTimesheet;
     private List<TimeSheetEntrySummaryDTO> entries;
     private List<ActionStatusDTO> actionStatus;
 }
