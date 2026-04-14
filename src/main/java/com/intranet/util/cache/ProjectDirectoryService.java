@@ -119,9 +119,22 @@ public class ProjectDirectoryService {
         map.put("ownerId", ownerId);
         map.put("ownerName", ownerName);
         map.put("ownerEmail", ownerEmail);
-
         map.put("members", membersList);
+        copyIfPresent(p, map, "startDate");
+        copyIfPresent(p, map, "endDate");
+        copyIfPresent(p, map, "plannedHours");
+        copyIfPresent(p, map, "estimatedHours");
+        copyIfPresent(p, map, "allocatedHours");
+        copyIfPresent(p, map, "plannedEffort");
+        copyIfPresent(p, map, "projectHours");
+        copyIfPresent(p, map, "hours");
 
         return map;
+    }
+
+    private void copyIfPresent(Map<String, Object> source, Map<String, Object> target, String key) {
+        if (source.containsKey(key) && source.get(key) != null) {
+            target.put(key, source.get(key));
+        }
     }
 }
