@@ -1,14 +1,16 @@
 # ==============================
-# 1️⃣ Build Stage (Maven + JDK Alpine)
+# 1️⃣ Build Stage (Maven + JDK )
 # ==============================
-FROM maven:3.9.9-eclipse-temurin-17-alpine AS builder
+
+# FROM maven:3.9.9-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9.9-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
 # Copy only pom first (for caching dependencies)
 COPY pom.xml .
 
-# Download dependencies (Alpine is faster with small downloads)
+# Download dependencies
 RUN mvn dependency:go-offline -B
 
 # Copy source code
@@ -19,9 +21,12 @@ RUN mvn clean package -DskipTests
 
 
 # ==============================
-# 2️⃣ Runtime Stage (JRE Alpine - Extra Slim)
+# 2️⃣ Runtime Stage (Alpine + JRE)
 # ==============================
-FROM eclipse-temurin:17-jre-alpine
+
+# ==============================
+# FROM eclipse-temurin:17-jre-alpine
+FROM amazoncorretto:17-alpine 
 
 WORKDIR /app
 

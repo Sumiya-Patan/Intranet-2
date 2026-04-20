@@ -62,5 +62,9 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
     AND t.workDate BETWEEN :startDate AND :endDate
     """)
     BigDecimal getTotalHours(Long userId, LocalDate startDate, LocalDate endDate);
-        
+
+    @Query("SELECT DISTINCT ts FROM TimeSheet ts LEFT JOIN FETCH ts.entries WHERE ts.userId = :userId AND ts.workDate BETWEEN :startDate AND :endDate")
+    List<TimeSheet> findByUserIdAndWorkDateBetweenWithEntries(@Param("userId") Long userId,
+                                                              @Param("startDate") LocalDate startDate,
+                                                              @Param("endDate") LocalDate endDate);
 }
