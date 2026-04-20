@@ -1,6 +1,7 @@
 package com.intranet.controller.RMS;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -9,7 +10,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.intranet.dto.rms.ResourceSummaryMinimalDTO;
+import com.intranet.dto.rms.MonthlySummaryResponseDTO;
 import com.intranet.dto.rms.TimeSheetSummaryResponseDTO;
+import com.intranet.dto.rms.UserSummarySimplifiedDTO;
 import com.intranet.service.RMS.RMSTimeSheetService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,14 +30,55 @@ public class RMSTimeSheetController {
     private final RMSTimeSheetService timeSheetService;
 
     @GetMapping("/RMS/summary")
-    @Operation(summary = "Controller for TimeSheet related operations in RMS")
+    @Operation(summary = "Get RMS utilization intelligence summary")
     public ResponseEntity<TimeSheetSummaryResponseDTO> getSummary(
-            @RequestParam Long userId,
-            @RequestParam LocalDate startDate,
-            @RequestParam LocalDate endDate) {
+            @RequestParam(required = false) Long userId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate startDate,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate endDate) {
 
         return ResponseEntity.ok(
                 timeSheetService.getSummary(userId, startDate, endDate)
+        );
+    }
+
+    @GetMapping("/RMS/resource-summaries")
+    @Operation(summary = "Get RMS resource-level summaries for all users")
+    public ResponseEntity<List<ResourceSummaryMinimalDTO>> getAllResourceSummaries(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate startDate,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate endDate) {
+
+        return ResponseEntity.ok(
+                timeSheetService.getAllResourceSummaries(startDate, endDate)
+        );
+    }
+
+    @GetMapping("/RMS/users")
+    @Operation(summary = "Get simplified user summaries with resource context, hourly split, trend signal, and utilization")
+    public ResponseEntity<List<UserSummarySimplifiedDTO>> getAllUserSummariesSimplified(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate startDate,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate endDate) {
+
+        return ResponseEntity.ok(
+                timeSheetService.getAllUserSummariesSimplified(startDate, endDate)
+        );
+    }
+
+    @GetMapping("/RMS/monthly-summary")
+    @Operation(summary = "Get monthly/period summary with overall KPIs, resource summaries, trends and hour breakdown")
+    public ResponseEntity<MonthlySummaryResponseDTO> getMonthlySummary(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate startDate,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+                    LocalDate endDate) {
+
+        return ResponseEntity.ok(
+                timeSheetService.getMonthlySummary(startDate, endDate)
         );
     }
 }
