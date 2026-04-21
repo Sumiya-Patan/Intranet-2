@@ -4,6 +4,7 @@ import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
+import com.intranet.dto.UserProjectDetailsDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.dto.external.ProjectWithUsersDTO;
@@ -41,6 +42,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.WeekFields;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -611,6 +613,80 @@ public class TimeSheetService {
         timeSheetRepository.save(timeSheet);
 
         return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
+    }
+
+    public List<UserProjectDetailsDTO> getUserProjectDetailsWithHours(Long userId) {
+        // Get all timesheets for the user
+        List<TimeSheet> timeSheets = timeSheetRepository.findByUserId(userId);
+        
+        if (timeSheets.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Group entries by project ID
+        Map<Long, List<TimeSheetEntry>> entriesByProject = timeSheets.stream()
+                .flatMap(ts -> ts.getEntries().stream())
+                .filter(entry -> entry.getProjectId() != null)
+                .collect(Collectors.groupingBy(TimeSheetEntry::getProjectId));
+
+        List<UserProjectDetailsDTO> result = new ArrayList<>();
+
+        for (Map.Entry<Long, List<TimeSheetEntry>> entry : entriesByProject.entrySet()) {
+            Long projectId = entry.getKey();
+            List<TimeSheetEntry> projectEntries = entry.getValue();
+
+            // Calculate billable and non-billable hours
+            BigDecimal billableHours = projectEntries.stream()
+                    .filter(TimeSheetEntry::isBillable)
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal nonBillableHours = projectEntries.stream()
+                    .filter(e -> !e.isBillable())
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalHours = billableHours.add(nonBillableHours);
+
+            // Calculate utilization percentage (billable hours / total hours * 100)
+            Double utilizationPercentage = totalHours.compareTo(BigDecimal.ZERO) > 0 
+                    ? billableHours.divide(totalHours, 4, RoundingMode.HALF_UP)
+                              .multiply(BigDecimal.valueOf(100))
+                              .doubleValue()
+                    : 0.0;
+
+            // Get project name
+            String projectName = getProjectName(projectId);
+
+            UserProjectDetailsDTO dto = new UserProjectDetailsDTO();
+            dto.setProjectId(projectId);
+            dto.setProjectName(projectName);
+            dto.setBillableHours(billableHours);
+            dto.setNonBillableHours(nonBillableHours);
+            dto.setTotalHours(totalHours);
+            dto.setUtilizationPercentage(utilizationPercentage);
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+    private String getProjectName(Long projectId) {
+        // First try to get from internal projects
+        if (projectId != null) {
+            List<InternalProject> internalProjects = internalProjectRepository.findByProjectId(projectId.intValue());
+            if (!internalProjects.isEmpty()) {
+                // Return the first project name found (or you could implement logic to choose the most appropriate one)
+                return internalProjects.get(0).getProjectName();
+            }
+        }
+
+        // If not found in internal projects, could call PMS API or return default
+        // For now, return a default name
+        return "Project " + projectId;
     }
 
 

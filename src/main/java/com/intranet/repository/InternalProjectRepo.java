@@ -1,5 +1,6 @@
 package com.intranet.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,8 @@ public interface InternalProjectRepo extends JpaRepository<InternalProject, Long
     Optional<InternalProject> findTopByOrderByTaskIdAsc();
 
     boolean existsByTaskId(int newTaskId);
+
+    List<InternalProject> findByProjectId(Integer projectId);
 
 }
 
