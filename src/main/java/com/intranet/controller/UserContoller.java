@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.*;
 
 import com.intranet.dto.UserDTO;
 import com.intranet.dto.UserHoursDTO;
+import com.intranet.dto.UserProjectDetailsDTO;
 import com.intranet.security.CurrentUser;
 import com.intranet.service.DashboardService;
+import com.intranet.service.TimeSheetService;
 import com.intranet.util.cache.UserDirectoryService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +32,7 @@ public class UserContoller {
     
     private final UserDirectoryService userDirectoryService;
     private final DashboardService dashboardService;
+    private final TimeSheetService timeSheetService;
 
     @GetMapping("/me")
     @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET')")
@@ -145,6 +148,21 @@ public class UserContoller {
             System.out.println("DEBUG: Exception occurred: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.badRequest().body("Failed to fetch users with hours: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/users/{userId}/project-details")
+//    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') OR hasAuthority('APPROVE_TIMESHEET') OR hasAuthority('TIMESHEET_ADMIN')")
+    @Operation(summary = "Get user's active projects with billable/non-billable hours and utilization")
+    public ResponseEntity<?> getUserProjectDetails(
+            @PathVariable Long userId,
+            HttpServletRequest request) {
+        
+        try {
+            List<UserProjectDetailsDTO> projectDetails = timeSheetService.getUserProjectDetailsWithHours(userId);
+            return ResponseEntity.ok(projectDetails);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Failed to fetch user project details: " + e.getMessage());
         }
     }
 }

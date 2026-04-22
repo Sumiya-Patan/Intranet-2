@@ -1,5 +1,7 @@
 package com.intranet.dto.rms;
 
+import java.math.BigDecimal;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,5 +15,7 @@ public class PortfolioTrendDTO {
     private String period;
     private Integer actual;
     private Integer planned;
+    private BigDecimal actual;
+    private BigDecimal planned;
     private Double util;
 }
