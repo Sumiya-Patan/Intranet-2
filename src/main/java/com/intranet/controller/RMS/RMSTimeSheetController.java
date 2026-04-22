@@ -28,12 +28,19 @@ public class RMSTimeSheetController {
     @GetMapping("/RMS/summary")
     @Operation(summary = "Controller for TimeSheet related operations in RMS")
     public ResponseEntity<TimeSheetSummaryResponseDTO> getSummary(
-            @RequestParam Long userId,
-            @RequestParam LocalDate startDate,
-            @RequestParam LocalDate endDate) {
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
+
+        // Default to current month if no dates provided
+        LocalDate today = LocalDate.now();
+        LocalDate defaultStartDate = today.withDayOfMonth(1);
+        LocalDate defaultEndDate = today;
+        
+        LocalDate effectiveStartDate = startDate != null ? startDate : defaultStartDate;
+        LocalDate effectiveEndDate = endDate != null ? endDate : defaultEndDate;
 
         return ResponseEntity.ok(
-                timeSheetService.getSummary(userId, startDate, endDate)
+                timeSheetService.getSummary(effectiveStartDate, effectiveEndDate)
         );
     }
 }

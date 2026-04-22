@@ -32,7 +32,7 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
 
      List<TimeSheet> findByUserIdAndWeekInfo_Id(Long userId, Long weekInfoId);
 
-     @Query("SELECT ts FROM TimeSheet ts WHERE ts.userId IN :userIds AND ts.status <> 'DRAFT'")
+     @Query("SELECT t FROM TimeSheet t WHERE t.userId IN :userIds AND t.status <> 'DRAFT'")
     List<TimeSheet> findNonDraftByUserIds(@Param("userIds") Set<Long> userIds);
 
      List<TimeSheet> findByUserIdAndWorkDateBetween(Long userId, LocalDate startOfMonth, LocalDate endOfMonth);
@@ -62,5 +62,46 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
     AND t.workDate BETWEEN :startDate AND :endDate
     """)
     BigDecimal getTotalHours(Long userId, LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT COALESCE(SUM(t.hoursWorked), 0)
+    FROM TimeSheet t
+    WHERE t.workDate BETWEEN :startDate AND :endDate
+    """)
+    BigDecimal getTotalHoursForAllUsers(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT COUNT(DISTINCT t.userId)
+    FROM TimeSheet t
+    WHERE t.workDate BETWEEN :startDate AND :endDate
+    """)
+    Long getUniqueUserCount(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT DAYNAME(t.workDate), COALESCE(SUM(t.hoursWorked), 0)
+    FROM TimeSheet t
+    WHERE t.workDate BETWEEN :startDate AND :endDate
+    GROUP BY DAYNAME(t.workDate), t.workDate
+    ORDER BY t.workDate
+    """)
+    List<Object[]> getDailyHoursBreakdown(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT CONCAT('Week ', WEEK(t.workDate)), COALESCE(SUM(t.hoursWorked), 0)
+    FROM TimeSheet t
+    WHERE t.workDate BETWEEN :startDate AND :endDate
+    GROUP BY WEEK(t.workDate), YEAR(t.workDate), CONCAT('Week ', WEEK(t.workDate))
+    ORDER BY WEEK(t.workDate)
+    """)
+    List<Object[]> getWeeklyHoursBreakdown(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT MONTHNAME(t.workDate), COALESCE(SUM(t.hoursWorked), 0)
+    FROM TimeSheet t
+    WHERE t.workDate BETWEEN :startDate AND :endDate
+    GROUP BY MONTH(t.workDate), YEAR(t.workDate), MONTHNAME(t.workDate)
+    ORDER BY YEAR(t.workDate), MONTH(t.workDate)
+    """)
+    List<Object[]> getMonthlyHoursBreakdown(LocalDate startDate, LocalDate endDate);
         
 }
