@@ -24,7 +24,6 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/timesheets")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*", allowedHeaders = "*")
-
 public class RMSTimeSheetController {
 
     private final RMSTimeSheetService timeSheetService;
@@ -37,8 +36,6 @@ public class RMSTimeSheetController {
                     LocalDate startDate,
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate endDate) {
-            @RequestParam(required = false) LocalDate startDate,
-            @RequestParam(required = false) LocalDate endDate) {
 
         // Default to current month if no dates provided
         LocalDate today = LocalDate.now();
@@ -49,7 +46,7 @@ public class RMSTimeSheetController {
         LocalDate effectiveEndDate = endDate != null ? endDate : defaultEndDate;
 
         return ResponseEntity.ok(
-                timeSheetService.getSummary(effectiveStartDate, effectiveEndDate)
+                timeSheetService.getSummary(null, effectiveStartDate, effectiveEndDate)
         );
     }
 
@@ -91,4 +88,5 @@ public class RMSTimeSheetController {
                 timeSheetService.getMonthlySummary(startDate, endDate)
         );
     }
+
 }

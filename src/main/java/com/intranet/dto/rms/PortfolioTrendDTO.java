@@ -15,7 +15,5 @@ public class PortfolioTrendDTO {
     private String period;
     private Integer actual;
     private Integer planned;
-    private BigDecimal actual;
-    private BigDecimal planned;
     private Double util;
 }

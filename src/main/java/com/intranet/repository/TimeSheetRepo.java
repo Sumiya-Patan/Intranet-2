@@ -16,33 +16,33 @@ import com.intranet.entity.TimeSheet;
 
 @Repository
 public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
-     Optional<TimeSheet> findByUserIdAndWorkDate(Long userId, LocalDate workDate);
+    Optional<TimeSheet> findByUserIdAndWorkDate(Long userId, LocalDate workDate);
 
-     List<TimeSheet> findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(Long userId, List<Long> weekIds);
+    List<TimeSheet> findByUserIdAndWeekInfo_IdInOrderByWorkDateAsc(Long userId, List<Long> weekIds);
 
-     List<TimeSheet> findByWorkDateBetween(LocalDate startDate, LocalDate endDate);
+    List<TimeSheet> findByWorkDateBetween(LocalDate startDate, LocalDate endDate);
 
-     @Query("SELECT ts FROM TimeSheet ts LEFT JOIN FETCH ts.weekInfo LEFT JOIN FETCH ts.entries WHERE ts.workDate BETWEEN :startDate AND :endDate")
-     List<TimeSheet> findByWorkDateBetweenWithWeekInfoAndEntries(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    @Query("SELECT ts FROM TimeSheet ts LEFT JOIN FETCH ts.weekInfo LEFT JOIN FETCH ts.entries WHERE ts.workDate BETWEEN :startDate AND :endDate")
+    List<TimeSheet> findByWorkDateBetweenWithWeekInfoAndEntries(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
-     @Query("SELECT t FROM TimeSheet t " +
-       "JOIN FETCH t.weekInfo w " +
-       "WHERE t.userId IN :userIds AND t.status = 'SUBMITTED'")
-     List<TimeSheet> findSubmittedByUserIds(@Param("userIds") Set<Long> userIds);
+    @Query("SELECT t FROM TimeSheet t " +
+            "JOIN FETCH t.weekInfo w " +
+            "WHERE t.userId IN :userIds AND t.status = 'SUBMITTED'")
+    List<TimeSheet> findSubmittedByUserIds(@Param("userIds") Set<Long> userIds);
 
-     List<TimeSheet> findByUserIdAndWeekInfo_Id(Long userId, Long weekInfoId);
+    List<TimeSheet> findByUserIdAndWeekInfo_Id(Long userId, Long weekInfoId);
 
-     @Query("SELECT ts FROM TimeSheet ts WHERE ts.userId IN :userIds AND ts.status <> 'DRAFT'")
+    @Query("SELECT ts FROM TimeSheet ts WHERE ts.userId IN :userIds AND ts.status <> 'DRAFT'")
     List<TimeSheet> findNonDraftByUserIds(@Param("userIds") Set<Long> userIds);
 
-     List<TimeSheet> findByUserIdAndWorkDateBetween(Long userId, LocalDate startOfMonth, LocalDate endOfMonth);
+    List<TimeSheet> findByUserIdAndWorkDateBetween(Long userId, LocalDate startOfMonth, LocalDate endOfMonth);
 
-     List<TimeSheet> findByUserIdInAndWorkDateBetween(Set<Long> memberIds, LocalDate startDate, LocalDate endDate);
+    List<TimeSheet> findByUserIdInAndWorkDateBetween(Set<Long> memberIds, LocalDate startDate, LocalDate endDate);
 
-     boolean existsByUserIdAndWorkDate(Long userId, LocalDate date);
+    boolean existsByUserIdAndWorkDate(Long userId, LocalDate date);
 
-      // Fetch all timesheets except DRAFT
-     @Query("SELECT t FROM TimeSheet t WHERE t.status <> com.intranet.entity.TimeSheet.Status.DRAFT")
+    // Fetch all timesheets except DRAFT
+    @Query("SELECT t FROM TimeSheet t WHERE t.status <> com.intranet.entity.TimeSheet.Status.DRAFT")
     List<TimeSheet> findAllNonDraft();
 
     @Query("""
@@ -69,47 +69,47 @@ public interface TimeSheetRepo extends JpaRepository<TimeSheet, Long> {
     List<TimeSheet> findByUserIdAndWorkDateBetweenWithEntries(@Param("userId") Long userId,
                                                               @Param("startDate") LocalDate startDate,
                                                               @Param("endDate") LocalDate endDate);
-}
 
-    @Query("""
+
+@Query("""
     SELECT COALESCE(SUM(t.hoursWorked), 0)
     FROM TimeSheet t
     WHERE t.workDate BETWEEN :startDate AND :endDate
     """)
-    BigDecimal getTotalHoursForAllUsers(LocalDate startDate, LocalDate endDate);
+BigDecimal getTotalHoursForAllUsers(LocalDate startDate, LocalDate endDate);
 
-    @Query("""
+@Query("""
     SELECT COUNT(DISTINCT t.userId)
     FROM TimeSheet t
     WHERE t.workDate BETWEEN :startDate AND :endDate
     """)
-    Long getUniqueUserCount(LocalDate startDate, LocalDate endDate);
+Long getUniqueUserCount(LocalDate startDate, LocalDate endDate);
 
-    @Query("""
+@Query("""
     SELECT DAYNAME(t.workDate), COALESCE(SUM(t.hoursWorked), 0)
     FROM TimeSheet t
     WHERE t.workDate BETWEEN :startDate AND :endDate
     GROUP BY DAYNAME(t.workDate), t.workDate
     ORDER BY t.workDate
     """)
-    List<Object[]> getDailyHoursBreakdown(LocalDate startDate, LocalDate endDate);
+List<Object[]> getDailyHoursBreakdown(LocalDate startDate, LocalDate endDate);
 
-    @Query("""
+@Query("""
     SELECT CONCAT('Week ', WEEK(t.workDate)), COALESCE(SUM(t.hoursWorked), 0)
     FROM TimeSheet t
     WHERE t.workDate BETWEEN :startDate AND :endDate
     GROUP BY WEEK(t.workDate), YEAR(t.workDate), CONCAT('Week ', WEEK(t.workDate))
     ORDER BY WEEK(t.workDate)
     """)
-    List<Object[]> getWeeklyHoursBreakdown(LocalDate startDate, LocalDate endDate);
+List<Object[]> getWeeklyHoursBreakdown(LocalDate startDate, LocalDate endDate);
 
-    @Query("""
+@Query("""
     SELECT MONTHNAME(t.workDate), COALESCE(SUM(t.hoursWorked), 0)
     FROM TimeSheet t
     WHERE t.workDate BETWEEN :startDate AND :endDate
     GROUP BY MONTH(t.workDate), YEAR(t.workDate), MONTHNAME(t.workDate)
     ORDER BY YEAR(t.workDate), MONTH(t.workDate)
     """)
-    List<Object[]> getMonthlyHoursBreakdown(LocalDate startDate, LocalDate endDate);
+List<Object[]> getMonthlyHoursBreakdown(LocalDate startDate, LocalDate endDate);
 
 }
