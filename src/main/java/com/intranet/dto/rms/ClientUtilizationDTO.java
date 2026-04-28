@@ -12,9 +12,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProjectUtilizationDTO {
-    private Long projectId;
-    private String projectName;
+public class ClientUtilizationDTO {
     private String clientName;
     
     // Hours breakdown
@@ -22,9 +20,11 @@ public class ProjectUtilizationDTO {
     private BigDecimal billableHours;
     private BigDecimal plannedHours;
     
-    // Resource metrics
+    // Project metrics
+    private Integer uniqueProjects;
     private Integer uniqueResources;
     private BigDecimal averageHoursPerResource;
+    private BigDecimal averageHoursPerProject;
     
     // Utilization metrics
     private BigDecimal utilizationPercentage;

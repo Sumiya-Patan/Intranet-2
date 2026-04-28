@@ -33,10 +33,12 @@ public class RMSTimeSheetController {
     @Operation(summary = "Get RMS utilization intelligence summary")
     public ResponseEntity<TimeSheetSummaryResponseDTO> getSummary(
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate startDate,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate endDate) {
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
 
         // Default to current month if no dates provided
         LocalDate today = LocalDate.now();
@@ -54,63 +56,39 @@ public class RMSTimeSheetController {
     @GetMapping("/RMS/resource-summaries")
     @Operation(summary = "Get RMS resource-level summaries for all users")
     public ResponseEntity<List<ResourceSummaryMinimalDTO>> getAllResourceSummaries(
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate startDate,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate endDate) {
 
-        // Default to current month if no dates provided
-        LocalDate today = LocalDate.now();
-        LocalDate defaultStartDate = today.withDayOfMonth(1);
-        LocalDate defaultEndDate = today;
-
-        LocalDate effectiveStartDate = startDate != null ? startDate : defaultStartDate;
-        LocalDate effectiveEndDate = endDate != null ? endDate : defaultEndDate;
-
         return ResponseEntity.ok(
-                timeSheetService.getAllResourceSummaries(effectiveStartDate, effectiveEndDate)
+                timeSheetService.getAllResourceSummaries(startDate, endDate)
         );
     }
 
     @GetMapping("/RMS/users")
     @Operation(summary = "Get simplified user summaries with resource context, hourly split, trend signal, and utilization")
     public ResponseEntity<List<UserSummarySimplifiedDTO>> getAllUserSummariesSimplified(
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate startDate,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate endDate) {
 
-        // Default to current month if no dates provided
-        LocalDate today = LocalDate.now();
-        LocalDate defaultStartDate = today.withDayOfMonth(1);
-        LocalDate defaultEndDate = today;
-
-        LocalDate effectiveStartDate = startDate != null ? startDate : defaultStartDate;
-        LocalDate effectiveEndDate = endDate != null ? endDate : defaultEndDate;
-
         return ResponseEntity.ok(
-                timeSheetService.getAllUserSummariesSimplified(effectiveStartDate, effectiveEndDate)
+                timeSheetService.getAllUserSummariesSimplified(startDate, endDate)
         );
     }
 
     @GetMapping("/RMS/monthly-summary")
     @Operation(summary = "Get monthly/period summary with overall KPIs, resource summaries, trends and hour breakdown")
     public ResponseEntity<MonthlySummaryResponseDTO> getMonthlySummary(
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate startDate,
-            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
                     LocalDate endDate) {
 
-        // Default to current month if no dates provided
-        LocalDate today = LocalDate.now();
-        LocalDate defaultStartDate = today.withDayOfMonth(1);
-        LocalDate defaultEndDate = today;
-
-        LocalDate effectiveStartDate = startDate != null ? startDate : defaultStartDate;
-        LocalDate effectiveEndDate = endDate != null ? endDate : defaultEndDate;
-
         return ResponseEntity.ok(
-                timeSheetService.getMonthlySummary(effectiveStartDate, effectiveEndDate)
+                timeSheetService.getMonthlySummary(startDate, endDate)
         );
     }
 }

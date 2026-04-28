@@ -12,14 +12,14 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProjectUtilizationDTO {
-    private Long projectId;
-    private String projectName;
-    private String clientName;
+public class RoleUtilizationDTO {
+    private String roleName;
     
     // Hours breakdown
     private BigDecimal totalHours;
     private BigDecimal billableHours;
+    private BigDecimal nonBillableHours;
+    private BigDecimal internalHours;
     private BigDecimal plannedHours;
     
     // Resource metrics
