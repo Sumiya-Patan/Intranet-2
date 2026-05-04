@@ -26,7 +26,7 @@ public class InternalWeeklySummaryController {
 
     @GetMapping("/internal/summary")
     @Operation(summary = "Get weekly internal project summary for all users")
-    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET')")
+    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET') or hasAuthority('TIMESHEET_ADMIN')")
     public ResponseEntity<List<ManagerWeeklySummaryDTO>> getInternalWeeklySummary(
             @CurrentUser UserDTO user,
             HttpServletRequest request) {
