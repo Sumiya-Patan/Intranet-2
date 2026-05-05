@@ -42,4 +42,24 @@ public class InternalWeeklySummaryController {
 
         return ResponseEntity.ok(summary);
     }
+
+
+    @GetMapping("/internal/summary/reportingManager")
+    @Operation(summary = "Get weekly internal project summary for all users under reporting manager")
+    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET') or hasAuthority('TIMESHEET_ADMIN')")
+    public ResponseEntity<List<ManagerWeeklySummaryDTO>> getInternalWeeklySummaryReportingManager(
+            @CurrentUser UserDTO user,
+            HttpServletRequest request) {
+
+        String authHeader = request.getHeader("Authorization");
+
+        LocalDate now = LocalDate.now();
+        LocalDate startOfMonth = now.withDayOfMonth(1);
+        LocalDate endOfMonth = now.withDayOfMonth(now.lengthOfMonth());
+
+        List<ManagerWeeklySummaryDTO> summary =
+                internalWeeklyService.getInternalWeeklySummary(authHeader, startOfMonth, endOfMonth);
+
+        return ResponseEntity.ok(summary);
+    }
 }
