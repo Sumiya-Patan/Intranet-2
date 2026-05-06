@@ -881,21 +881,19 @@ public class TimesheetFinanceReportService {
 
         String projectName = (String) projectInfo.getOrDefault("name", "Unknown Project");
 
-        BigDecimal billableHours = projectEntries.stream()
-                .filter(TimeSheetEntry::isBillable)
-                .map(TimeSheetEntry::getHoursWorked)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Sum from raw fromTime/toTime (HH.MM result with proper minute roll-over).
+        BigDecimal billableHours = com.intranet.service.TimeUtil.sumEntryHours(
+                projectEntries.stream().filter(TimeSheetEntry::isBillable).collect(Collectors.toList()));
 
-        BigDecimal nonBillableHours = projectEntries.stream()
-                .filter(e -> !e.isBillable())
-                .map(TimeSheetEntry::getHoursWorked)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal nonBillableHours = com.intranet.service.TimeUtil.sumEntryHours(
+                projectEntries.stream().filter(e -> !e.isBillable()).collect(Collectors.toList()));
 
-        BigDecimal totalHours = billableHours.add(nonBillableHours);
+        BigDecimal totalHours = com.intranet.service.TimeUtil.sumHours(
+                java.util.List.of(billableHours, nonBillableHours));
 
-        // Collect global totals
-        totalBillableAll = totalBillableAll.add(billableHours);
-        totalNonBillableAll = totalNonBillableAll.add(nonBillableHours);
+        // Collect global totals (HH.MM-aware).
+        totalBillableAll = com.intranet.service.TimeUtil.sumHours(java.util.List.of(totalBillableAll, billableHours));
+        totalNonBillableAll = com.intranet.service.TimeUtil.sumHours(java.util.List.of(totalNonBillableAll, nonBillableHours));
 
         Map<String, Object> projectMap = new LinkedHashMap<>();
         projectMap.put("projectId", projectId);
@@ -907,8 +905,9 @@ public class TimesheetFinanceReportService {
         projectBreakdown.add(projectMap);
     }
 
-    // Compute global totals
-    BigDecimal globalTotalHours = totalBillableAll.add(totalNonBillableAll);
+    // Compute global totals (HH.MM-aware)
+    BigDecimal globalTotalHours = com.intranet.service.TimeUtil.sumHours(
+            java.util.List.of(totalBillableAll, totalNonBillableAll));
 
     // Step 6: Compute contribution for each project
     for (Map<String, Object> project : projectBreakdown) {

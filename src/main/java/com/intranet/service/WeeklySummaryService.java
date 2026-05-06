@@ -244,7 +244,8 @@ public class WeeklySummaryService {
             TimeSheetSummaryDTO tsDTO = new TimeSheetSummaryDTO();
             tsDTO.setTimesheetId(ts.getId());
             tsDTO.setWorkDate(ts.getWorkDate());
-            tsDTO.setHoursWorked(ts.getHoursWorked());
+            // Recompute from entry fromTime/toTime — bypasses corrupted stored values.
+            tsDTO.setHoursWorked(TimeUtil.computeTimeSheetHours(ts));
             tsDTO.setEntries(entries);
             
             // ✅ Mark if this timesheet is an auto-generated 8-hour default holiday
