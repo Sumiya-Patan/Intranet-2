@@ -5,15 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Map;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserMonthlyUtilizationDTO {
-
-    private Long userId;
-
-    private Map<String, MonthlySummaryDTO> monthlySummary;
+public class AlertDTO {
+    private String id;
+    private String scope;
+    private String message;
+    private String severity;
+    private String status;
 }

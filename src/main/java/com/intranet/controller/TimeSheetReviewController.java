@@ -36,7 +36,7 @@ public class TimeSheetReviewController {
 
 
     @PostMapping("/review/internal")
-    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET')")
+    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET') OR hasAuthority('TIMESHEET_ADMIN')")
     @Operation(summary = "Approve or reject multiple timesheets for a user by manager internal")
     public ResponseEntity<?> reviewMultipleTimesheetsInternal(
             @CurrentUser UserDTO manager,
@@ -49,7 +49,7 @@ public class TimeSheetReviewController {
     }
 
     @PostMapping("/review/internal/bulk")
-    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET')")
+    @PreAuthorize("hasAuthority('REVIEW_INTERNAL_TIMESHEET') OR hasAuthority('TIMESHEET_ADMIN')")
     @Operation(summary = "Approve or reject multiple timesheets for a user by manager internal")
     public ResponseEntity<?> reviewMultipleTimesheetsInternal(
             @CurrentUser UserDTO manager,

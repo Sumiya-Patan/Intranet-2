@@ -117,4 +117,31 @@ List<TimeSheetEntry> findByTimeSheetId(Long timeSheetId);
         GROUP BY e.projectId
     """)
     List<RMSProjectHoursDTO> getProjectHours(Long userId, LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT COALESCE(SUM(e.hoursWorked), 0)
+    FROM TimeSheetEntry e
+    WHERE e.timeSheet.workDate BETWEEN :startDate AND :endDate
+    AND e.isBillable = true
+    """)
+    BigDecimal getBillableHoursForAllUsers(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT COALESCE(SUM(e.hoursWorked), 0)
+    FROM TimeSheetEntry e
+    WHERE e.timeSheet.workDate BETWEEN :startDate AND :endDate
+    AND e.isBillable = false
+    """)
+    BigDecimal getNonBillableHoursForAllUsers(LocalDate startDate, LocalDate endDate);
+
+    @Query("""
+    SELECT new com.intranet.dto.rms.RMSProjectHoursDTO(
+        e.projectId,
+        COALESCE(SUM(e.hoursWorked), 0)
+    )
+    FROM TimeSheetEntry e
+    WHERE e.timeSheet.workDate BETWEEN :startDate AND :endDate
+        GROUP BY e.projectId
+    """)
+    List<RMSProjectHoursDTO> getProjectHoursForAllUsers(LocalDate startDate, LocalDate endDate);
 }

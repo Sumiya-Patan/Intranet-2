@@ -46,4 +46,22 @@ public class ManagerWeeklySummaryController {
 
         return ResponseEntity.ok(summary);
     }
+
+    @GetMapping("/manager/previous-month/pending")
+    @Operation(summary = "Get previous month's timesheets that are still pending review by this manager")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<List<ManagerWeeklySummaryDTO>> getPreviousMonthPendingForManager(
+            @CurrentUser UserDTO user,
+            HttpServletRequest request) {
+
+        String authHeader = request.getHeader("Authorization");
+        LocalDate firstOfPrevMonth = LocalDate.now().minusMonths(1).withDayOfMonth(1);
+        LocalDate lastOfPrevMonth = firstOfPrevMonth.withDayOfMonth(firstOfPrevMonth.lengthOfMonth());
+
+        List<ManagerWeeklySummaryDTO> summary =
+                managerWeeklySummaryService.getPendingTimesheetsByManagerForPreviousMonth(
+                        user.getId(), authHeader, firstOfPrevMonth, lastOfPrevMonth);
+
+        return ResponseEntity.ok(summary);
+    }
 }

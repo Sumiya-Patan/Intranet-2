@@ -4,6 +4,7 @@ import com.intranet.dto.AddEntryDTO;
 import com.intranet.dto.DeleteTimeSheetEntriesRequest;
 import com.intranet.dto.TimeSheetEntryCreateDTO;
 import com.intranet.dto.TimeSheetUpdateRequest;
+import com.intranet.dto.UserProjectDetailsDTO;
 import com.intranet.dto.external.ManagerUserMappingDTO;
 import com.intranet.dto.external.ProjectTaskView;
 import com.intranet.dto.external.ProjectWithUsersDTO;
@@ -41,6 +42,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.WeekFields;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -105,9 +107,8 @@ public class TimeSheetService {
         }).collect(Collectors.toList());
 
         timeSheet.setEntries(entries);
-        timeSheet.setHoursWorked(entries.stream()
-                .map(TimeSheetEntry::getHoursWorked)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        // Sum from raw fromTime/toTime (correct HH.MM with minute roll-over).
+        timeSheet.setHoursWorked(TimeUtil.sumEntryHours(entries));
 
         timeSheetRepository.save(timeSheet);
 
@@ -215,10 +216,8 @@ public class TimeSheetService {
             entry.setOtherDescription(dto.getOtherDescription());
             entry.setBillable(dto.isBillable());
 
-            // Auto-calculate hours
-            long minutes = java.time.Duration.between(dto.getFromTime(), dto.getToTime()).toMinutes();
-            BigDecimal hours = BigDecimal.valueOf(minutes / 60.0);
-            entry.setHoursWorked(hours);
+            // Auto-calculate hours in HH.MM (consistent with calculateHours used elsewhere)
+            entry.setHoursWorked(TimeUtil.calculateHours(dto.getFromTime(), dto.getToTime()));
 
             newEntries.add(entry);
         }
@@ -226,13 +225,11 @@ public class TimeSheetService {
         // 3️⃣ Add new entries to the timesheet
         timeSheet.getEntries().addAll(newEntries);
 
-        // 4️⃣ Recalculate total hours (existing + new)
-        BigDecimal totalHours = timeSheet.getEntries().stream()
-                .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 4️⃣ Recalculate total hours from raw fromTime/toTime (correct HH.MM)
+        BigDecimal totalHours = TimeUtil.sumEntryHours(timeSheet.getEntries());
 
-        // 5️⃣ Validate total hours (must be >= 8)
-        if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+        // 5️⃣ Validate total hours (must be >= 8h00). Compare in minutes to avoid HH.MM-vs-decimal confusion.
+        if (TimeUtil.hhmmToMinutes(totalHours) < 8 * 60) {
             throw new IllegalArgumentException("Total hours in timesheet must be at least 8. Current total: "
                     + totalHours.stripTrailingZeros().toPlainString());
         }
@@ -270,10 +267,8 @@ public class TimeSheetService {
         return "All entries deleted. TimeSheet also removed.";
     }
 
-    // ✅ Recalculate total hours safely
-    BigDecimal totalHours = timeSheet.getEntries().stream()
-            .map(e -> e.getHoursWorked() != null ? e.getHoursWorked() : BigDecimal.ZERO)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    // ✅ Recalculate total hours from raw fromTime/toTime (correct HH.MM)
+    BigDecimal totalHours = TimeUtil.sumEntryHours(timeSheet.getEntries());
 
     timeSheet.setHoursWorked(totalHours);
     timeSheetRepository.save(timeSheet);
@@ -585,32 +580,101 @@ public class TimeSheetService {
             entry.setToTime(newTo);
             if (dto.getOtherDescription() != null) entry.setOtherDescription(dto.getOtherDescription());
 
-            // ✅ 7️⃣ Calculate hours automatically
-            long minutes = java.time.Duration.between(newFrom, newTo).toMinutes();
-            entry.setHoursWorked(BigDecimal.valueOf(minutes / 60.0));
+            // ✅ 7️⃣ Calculate hours automatically in HH.MM
+            entry.setHoursWorked(TimeUtil.calculateHours(newFrom, newTo));
 
             timeSheetEntryRepository.save(entry);
         }
 
-        // 8️⃣ Recalculate total hours
-        for (TimeSheetEntry e : timeSheet.getEntries()) {
-            if (e.getHoursWorked() != null) {
-                totalHours = totalHours.add(e.getHoursWorked());
-            }
-        }
-        
-        // 9️⃣ Validate minimum total hours (must be >= 8)
-        if (totalHours.compareTo(BigDecimal.valueOf(8)) < 0) {
+        // 8️⃣ Recalculate total hours from raw fromTime/toTime (correct HH.MM)
+        totalHours = TimeUtil.sumEntryHours(timeSheet.getEntries());
+
+        // 9️⃣ Validate minimum total hours (must be >= 8h00). Compare in minutes to avoid HH.MM-vs-decimal confusion.
+        if (TimeUtil.hhmmToMinutes(totalHours) < 8 * 60) {
             throw new IllegalArgumentException("Total hours in the timesheet must be at least 8. Current total: "
                     + totalHours.stripTrailingZeros().toPlainString() + " hours.");
         }
-        
+
         // 9️⃣ Update the timesheet summary
         timeSheet.setHoursWorked(totalHours);
         timeSheet.setUpdatedAt(LocalDateTime.now());
         timeSheetRepository.save(timeSheet);
 
         return "Entries updated successfully. Total hours now: " + totalHours.stripTrailingZeros().toPlainString();
+    }
+
+    public List<UserProjectDetailsDTO> getUserProjectDetailsWithHours(Long userId) {
+        // Get all timesheets for the user
+        List<TimeSheet> timeSheets = timeSheetRepository.findByUserId(userId);
+        
+        if (timeSheets.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Group entries by project ID
+        Map<Long, List<TimeSheetEntry>> entriesByProject = timeSheets.stream()
+                .flatMap(ts -> ts.getEntries().stream())
+                .filter(entry -> entry.getProjectId() != null)
+                .collect(Collectors.groupingBy(TimeSheetEntry::getProjectId));
+
+        List<UserProjectDetailsDTO> result = new ArrayList<>();
+
+        for (Map.Entry<Long, List<TimeSheetEntry>> entry : entriesByProject.entrySet()) {
+            Long projectId = entry.getKey();
+            List<TimeSheetEntry> projectEntries = entry.getValue();
+
+            // Calculate billable and non-billable hours
+            BigDecimal billableHours = projectEntries.stream()
+                    .filter(TimeSheetEntry::isBillable)
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal nonBillableHours = projectEntries.stream()
+                    .filter(e -> !e.isBillable())
+                    .map(TimeSheetEntry::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal totalHours = billableHours.add(nonBillableHours);
+
+            // Calculate utilization percentage (billable hours / total hours * 100)
+            Double utilizationPercentage = totalHours.compareTo(BigDecimal.ZERO) > 0 
+                    ? billableHours.divide(totalHours, 4, RoundingMode.HALF_UP)
+                              .multiply(BigDecimal.valueOf(100))
+                              .doubleValue()
+                    : 0.0;
+
+            // Get project name
+            String projectName = getProjectName(projectId);
+
+            UserProjectDetailsDTO dto = new UserProjectDetailsDTO();
+            dto.setProjectId(projectId);
+            dto.setProjectName(projectName);
+            dto.setBillableHours(billableHours);
+            dto.setNonBillableHours(nonBillableHours);
+            dto.setTotalHours(totalHours);
+            dto.setUtilizationPercentage(utilizationPercentage);
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+    private String getProjectName(Long projectId) {
+        // First try to get from internal projects
+        if (projectId != null) {
+            List<InternalProject> internalProjects = internalProjectRepository.findByProjectId(projectId.intValue());
+            if (!internalProjects.isEmpty()) {
+                // Return the first project name found (or you could implement logic to choose the most appropriate one)
+                return internalProjects.get(0).getProjectName();
+            }
+        }
+
+        // If not found in internal projects, could call PMS API or return default
+        // For now, return a default name
+        return "Project " + projectId;
     }
 
 
