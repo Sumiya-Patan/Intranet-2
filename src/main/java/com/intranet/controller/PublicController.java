@@ -12,6 +12,6 @@ public class PublicController {
 
     @GetMapping("/hello")
     public String hello() {
-        return "hello";
+        return "Welcome to the Intranet Time Sheet Management System of Paves Technologies!";
     }
 }
