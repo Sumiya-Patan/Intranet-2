@@ -54,7 +54,7 @@ public class TimeSheetReportFinanceController {
         }
 
         catch(Exception e){
-                return ResponseEntity.badRequest().body(Map.of("error", "Internal server error"));
+                return ResponseEntity.internalServerError().body(Map.of("error", "Internal server error"));
         }
         
     }
