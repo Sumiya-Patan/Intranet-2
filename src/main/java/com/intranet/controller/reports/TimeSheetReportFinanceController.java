@@ -3,6 +3,7 @@ package com.intranet.controller.reports;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +25,7 @@ public class TimeSheetReportFinanceController {
 
     @GetMapping("/monthly_finance")
     @Operation  (summary = "Get monthly finance report", description = "Retrieve a detailed monthly finance report.")
-    // @PreAuthorize("hasAuthority('VIEW_FINANCE_REPORT')")
+    @PreAuthorize("hasAuthority('TIMESHEET_ADMIN')")
     public ResponseEntity<?> getMonthlyFinanceReport(
         @RequestParam(required = false) Integer month,
         @RequestParam(required = false) Integer year
