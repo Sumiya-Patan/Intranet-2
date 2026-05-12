@@ -293,7 +293,8 @@ public class TimeSheetReviewService {
         boolean allApproved = weekTimeSheets.stream()
                 .allMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED);
         boolean anyApproved = weekTimeSheets.stream()
-                .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
+                .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED
+                             || ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
     
 
         WeeklyTimeSheetReview.Status weeklyStatus;
