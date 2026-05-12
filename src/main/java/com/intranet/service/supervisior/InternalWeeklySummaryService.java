@@ -15,9 +15,14 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.intranet.dto.TimeSheetEntrySummaryDTO;
 import com.intranet.dto.TimeSheetSummaryDTO;
@@ -46,6 +51,9 @@ public class InternalWeeklySummaryService {
     @Value("${ums.api.base-url}")
     private String umsBaseUrl;
 
+    @Value("${eos.api.base-url}")
+    private String eosBaseUrl;
+
     public List<ManagerWeeklySummaryDTO> getInternalWeeklySummary(String authHeader,
                                                                   LocalDate startOfMonth,
                                                                   LocalDate endOfMonth) {
@@ -54,10 +62,42 @@ public class InternalWeeklySummaryService {
         headers.set("Authorization", authHeader);
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        // STEP 1: Fetch all users from UMS
         Map<Long, Map<String, Object>> userCache = fetchAllUsers(entity);
+        List<TimeSheet> allSheets = timeSheetRepo.findAllNonDraft();
 
-        // STEP 2: Load internal project catalog grouped by projectId (allows multiple tasks per project)
+        return buildInternalWeeklySummary(allSheets, userCache, startOfMonth, endOfMonth);
+    }
+
+    public List<ManagerWeeklySummaryDTO> getInternalWeeklySummaryForReportingManager(String authHeader,
+                                                                                     String managerEmpid,
+                                                                                     LocalDate startOfMonth,
+                                                                                     LocalDate endOfMonth) {
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", authHeader);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Void> getEntity = new HttpEntity<>(headers);
+
+        // STEP 1: EOS — direct reports for this manager
+        List<String> employeeIds = fetchReportingManagerEmployeeIds(getEntity, managerEmpid);
+        if (employeeIds.isEmpty()) return Collections.emptyList();
+
+        // STEP 2: UMS — employee_id -> user_id mapping
+        Set<Long> userIds = fetchUserIdsForEmployeeIds(headers, employeeIds);
+        if (userIds.isEmpty()) return Collections.emptyList();
+
+        // STEP 3: Aggregate against the scoped timesheet set
+        Map<Long, Map<String, Object>> userCache = fetchAllUsers(getEntity);
+        List<TimeSheet> scopedSheets = timeSheetRepo.findNonDraftByUserIds(userIds);
+
+        return buildInternalWeeklySummary(scopedSheets, userCache, startOfMonth, endOfMonth);
+    }
+
+    private List<ManagerWeeklySummaryDTO> buildInternalWeeklySummary(List<TimeSheet> sheets,
+                                                                     Map<Long, Map<String, Object>> userCache,
+                                                                     LocalDate startOfMonth,
+                                                                     LocalDate endOfMonth) {
+
         Map<Long, List<InternalProject>> internalProjectMap =
                 internalProjectRepo.findAll().stream()
                         .collect(Collectors.groupingBy(
@@ -68,43 +108,38 @@ public class InternalWeeklySummaryService {
             return Collections.emptyList();
         }
 
-        // STEP 3: Fetch all NON-DRAFT timesheets
-        List<TimeSheet> allSheets = timeSheetRepo.findAllNonDraft();
-        if (allSheets == null || allSheets.isEmpty()) {
+        if (sheets == null || sheets.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // STEP 4: Filter month
-        List<TimeSheet> monthSheets = allSheets.stream()
+        // Filter month
+        List<TimeSheet> monthSheets = sheets.stream()
                 .filter(ts -> ts.getWorkDate() != null
                         && !ts.getWorkDate().isBefore(startOfMonth)
                         && !ts.getWorkDate().isAfter(endOfMonth))
                 .collect(Collectors.toList());
 
-        // STEP 5: STRICT FILTER — timesheet must contain ONLY internal project entries
-                List<TimeSheet> internalSheets = monthSheets.stream()
+        // STRICT FILTER — timesheet must contain ONLY internal project entries
+        List<TimeSheet> internalSheets = monthSheets.stream()
                 .filter(ts -> {
-                if (ts.getEntries() == null || ts.getEntries().isEmpty()) return false;
+                    if (ts.getEntries() == null || ts.getEntries().isEmpty()) return false;
 
-                // Must have at least one internal entry
-                boolean hasInternal = ts.getEntries().stream()
-                        .anyMatch(e -> internalProjectMap.containsKey(e.getProjectId()));
+                    boolean hasInternal = ts.getEntries().stream()
+                            .anyMatch(e -> internalProjectMap.containsKey(e.getProjectId()));
 
-                if (!hasInternal) return false;
+                    if (!hasInternal) return false;
 
-                // Must NOT contain any external entry
-                boolean hasExternal = ts.getEntries().stream()
-                        .anyMatch(e -> !internalProjectMap.containsKey(e.getProjectId()));
+                    boolean hasExternal = ts.getEntries().stream()
+                            .anyMatch(e -> !internalProjectMap.containsKey(e.getProjectId()));
 
-                return !hasExternal; // reject if mixed
+                    return !hasExternal;
                 })
                 .collect(Collectors.toList());
 
-
         if (internalSheets.isEmpty()) return Collections.emptyList();
 
-        // STEP 6: Group by user and build manager DTOs
-        List<ManagerWeeklySummaryDTO> result = internalSheets.stream()
+        // Group by user and build manager DTOs
+        return internalSheets.stream()
                 .collect(Collectors.groupingBy(TimeSheet::getUserId))
                 .entrySet().stream()
                 .map(entry -> {
@@ -134,8 +169,6 @@ public class InternalWeeklySummaryService {
                 })
                 .sorted(Comparator.comparing(ManagerWeeklySummaryDTO::getUserName, Comparator.nullsLast(String::compareToIgnoreCase)))
                 .collect(Collectors.toList());
-
-        return result;
     }
 
 
@@ -164,6 +197,57 @@ public class InternalWeeklySummaryService {
             e.printStackTrace();
         }
         return Collections.emptyMap();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> fetchReportingManagerEmployeeIds(HttpEntity<Void> entity, String managerEmpid) {
+        String url = String.format("%s/hr/reporting-manager/%s/employees", eosBaseUrl, managerEmpid);
+        try {
+            ResponseEntity<Map<String, Object>> res = restTemplate.exchange(
+                    url, HttpMethod.GET, entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            Map<String, Object> body = res.getBody();
+            if (body == null || !body.containsKey("employees")) return Collections.emptyList();
+
+            List<Map<String, Object>> employees = (List<Map<String, Object>>) body.get("employees");
+            return employees.stream()
+                    .map(e -> (String) e.get("employee_id"))
+                    .filter(id -> id != null && !id.isBlank())
+                    .collect(Collectors.toList());
+        } catch (HttpStatusCodeException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "EOS call failed ");
+        } catch (RestClientException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "EOS call failed");
+        }
+    }
+
+    private Set<Long> fetchUserIdsForEmployeeIds(HttpHeaders headers, List<String> employeeIds) {
+        String url = String.format("%s/admin/users/employee/ids", umsBaseUrl);
+        try {
+            Map<String, Object> requestBody = Map.of("employee_ids", employeeIds);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<Map<String, Map<String, Object>>> res = restTemplate.exchange(
+                    url, HttpMethod.POST, entity,
+                    new ParameterizedTypeReference<Map<String, Map<String, Object>>>() {});
+
+            Map<String, Map<String, Object>> resp = res.getBody();
+            if (resp == null) return Collections.emptySet();
+
+            return resp.values().stream()
+                    .filter(v -> v != null && v.get("user_id") != null)
+                    .map(v -> ((Number) v.get("user_id")).longValue())
+                    .collect(Collectors.toSet());
+        } catch (HttpStatusCodeException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "UMS lookup failed");
+        } catch (RestClientException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "UMS lookup failed");
+        }
     }
 
     private String extractName(Map<String, Object> user) {

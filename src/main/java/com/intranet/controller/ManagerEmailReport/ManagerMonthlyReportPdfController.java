@@ -25,7 +25,7 @@ public class ManagerMonthlyReportPdfController {
     private final ManagerMonthlyReportPdfEmailService emailService;
 
     @GetMapping("/managerMonthlyPdf")
-    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET') or hasAuthority('VIEW_TIMESHEET')")
+    @PreAuthorize("hasAuthority('APPROVE_TIMESHEET')")
     @Operation(summary = "Generate and email manager monthly report PDF", description = "Generates a PDF report for the manager's monthly timesheet and emails it to them.")
     public ResponseEntity<?> generateManagerReport(
             @CurrentUser UserDTO currentUser,
