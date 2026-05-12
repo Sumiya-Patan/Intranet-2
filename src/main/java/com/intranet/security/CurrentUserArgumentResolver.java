@@ -48,7 +48,7 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
         // Build UserDTO
         UserDTO userDTO = new UserDTO(
                 Long.valueOf(jwt.getClaimAsString("user_id")), // user_id as Long
-                jwt.getClaimAsString("employee_id") != null ? Long.valueOf(jwt.getClaimAsString("employee_id")) : 0L, // employee_id as Long, defaults to 0 if null
+                jwt.getClaimAsString("employee_id") != null ? jwt.getClaimAsString("employee_id") : "0", // employee_id as String, defaults to "0" if null
                 jwt.getClaimAsString("obs_user_uuid") != null ? jwt.getClaimAsString("obs_user_uuid") : "No OBS User UUID",     // user_uuid as String
                 jwt.getClaimAsString("name"),                 // name
                 jwt.getClaimAsString("email"),                // email as String

@@ -69,7 +69,7 @@ public class InternalWeeklySummaryService {
     }
 
     public List<ManagerWeeklySummaryDTO> getInternalWeeklySummaryForReportingManager(String authHeader,
-                                                                                     String managerUserUuid,
+                                                                                     String managerEmpid,
                                                                                      LocalDate startOfMonth,
                                                                                      LocalDate endOfMonth) {
 
@@ -79,7 +79,7 @@ public class InternalWeeklySummaryService {
         HttpEntity<Void> getEntity = new HttpEntity<>(headers);
 
         // STEP 1: EOS — direct reports for this manager
-        List<String> employeeIds = fetchReportingManagerEmployeeIds(getEntity, managerUserUuid);
+        List<String> employeeIds = fetchReportingManagerEmployeeIds(getEntity, managerEmpid);
         if (employeeIds.isEmpty()) return Collections.emptyList();
 
         // STEP 2: UMS — employee_id -> user_id mapping
@@ -200,8 +200,8 @@ public class InternalWeeklySummaryService {
     }
 
     @SuppressWarnings("unchecked")
-    private List<String> fetchReportingManagerEmployeeIds(HttpEntity<Void> entity, String managerUuid) {
-        String url = String.format("%s/hr/reporting-manager/%s/employees", eosBaseUrl, managerUuid);
+    private List<String> fetchReportingManagerEmployeeIds(HttpEntity<Void> entity, String managerEmpid) {
+        String url = String.format("%s/hr/reporting-manager/%s/employees", eosBaseUrl, managerEmpid);
         try {
             ResponseEntity<Map<String, Object>> res = restTemplate.exchange(
                     url, HttpMethod.GET, entity,

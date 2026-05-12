@@ -60,8 +60,8 @@ public class InternalWeeklySummaryController {
 
         String authHeader = request.getHeader("Authorization");
 
-        String managerUuid = user.getUser_uuid();
-        if (managerUuid == null || managerUuid.isBlank() || "No OBS User UUID".equals(managerUuid)) {
+        String managerEmpid = user.getEmployee_id();
+        if (managerEmpid == null || managerEmpid.isBlank() || "No OBS User UUID".equals(managerEmpid)) {
             return ResponseEntity.ok(Collections.emptyList());
         }
 
@@ -71,7 +71,7 @@ public class InternalWeeklySummaryController {
 
         List<ManagerWeeklySummaryDTO> summary =
                 internalWeeklyService.getInternalWeeklySummaryForReportingManager(
-                        authHeader, managerUuid, startOfMonth, endOfMonth);
+                        authHeader, managerEmpid, startOfMonth, endOfMonth);
 
         return ResponseEntity.ok(summary);
     }
