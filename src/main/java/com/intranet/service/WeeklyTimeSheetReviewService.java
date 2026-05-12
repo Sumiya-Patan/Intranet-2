@@ -30,6 +30,7 @@ import com.intranet.dto.email.WeeklySubmissionEmailDTO;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetOnHolidaysType;
 import com.intranet.entity.TimeSheetReview;
+import com.intranet.entity.TimesheetSettings;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
 import com.intranet.repository.TimeSheetOnHolidayTypeRepo;
@@ -53,6 +54,7 @@ public class WeeklyTimeSheetReviewService {
         private final ManagerNotificationEmailService managerNotificationEmailService;
         private final HolidayExcludeUsersService holidayExcludeUsersService;
         private final TimeSheetOnHolidayTypeRepo timeSheetOnHolidayTypeRepo;
+        private final TimesheetSettingsService timesheetSettingsService;
 
         @Value("${tms.api.base-url}")
         private String tmsBaseUrl;
@@ -135,14 +137,19 @@ public class WeeklyTimeSheetReviewService {
     LocalDate end = commonWeek.getEndDate();
     List<LocalDate> weekDates = start.datesUntil(end.plusDays(1)).toList();
 
+    // ✅ Load configurable hour settings (active row or defaults if unset)
+    TimesheetSettings settings = timesheetSettingsService.getActiveSettings();
+    BigDecimal regularHrs = settings.getMinHrsRegular();
+    BigDecimal weekendHrs = settings.getMinHrsWeekend();
+    BigDecimal leaveHrs   = settings.getAutogenLeaveHrs();
+
     // ✅ Step 4: Determine required hours and required dates based on holidays and weekends
-    Map<LocalDate, Integer> requiredHoursPerDate = new LinkedHashMap<>();
+    Map<LocalDate, BigDecimal> requiredHoursPerDate = new LinkedHashMap<>();
 
     for (LocalDate date : weekDates) {
-        int defaultHours;
         boolean isWeekend = date.getDayOfWeek() == java.time.DayOfWeek.SATURDAY ||
                             date.getDayOfWeek() == java.time.DayOfWeek.SUNDAY;
-        defaultHours = isWeekend ? 4 : 8;
+        BigDecimal defaultHours = isWeekend ? weekendHrs : regularHrs;
 
         Map<String, Object> holiday = holidayMap.get(date);
         boolean submitAllowed = false;
@@ -179,23 +186,24 @@ public class WeeklyTimeSheetReviewService {
         );
     }
 
-    // ✅ Step 6: Compute total required hours
-    int totalRequiredHours = requiredHoursPerDate.values().stream()
-            .mapToInt(Integer::intValue)
-            .sum();
-    BigDecimal requiredHours = BigDecimal.valueOf(totalRequiredHours);
+    // ✅ Step 6: Compute total required hours (HH.MM literal — sum via minutes)
+    BigDecimal requiredHours = TimeUtil.sumHours(
+            new java.util.ArrayList<>(requiredHoursPerDate.values()));
 
-    // ✅ Step 7: Calculate total worked hours
-    BigDecimal totalWorked = timeSheets.stream()
-            .map(TimeSheet::getHoursWorked)
-            .filter(Objects::nonNull)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    // ✅ Step 7: Calculate total worked hours (HH.MM literal — sum via minutes)
+    BigDecimal totalWorked = TimeUtil.sumHours(
+            timeSheets.stream()
+                    .map(TimeSheet::getHoursWorked)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList()));
 
-    // ✅ Step 8: Validation check
-    if (totalWorked.compareTo(requiredHours) < 0) {
+    // ✅ Step 8: Validation check (compare in minutes to avoid BigDecimal HH.MM pitfalls)
+    long workedMinutes = TimeUtil.hhmmToMinutes(totalWorked);
+    long requiredMinutes = TimeUtil.hhmmToMinutes(requiredHours);
+    if (workedMinutes < requiredMinutes) {
         throw new IllegalArgumentException(String.format(
-            "Weekly total hours %.2f are less than required minimum %.2f hours for week %d.",
-            totalWorked, requiredHours, commonWeek.getWeekNo()
+            "Weekly total hours %s are less than required minimum %s for week %d.",
+            totalWorked.toPlainString(), requiredHours.toPlainString(), commonWeek.getWeekNo()
         ));
     }
             // ✅ Step 7.1: Identify and auto-generate timesheets for submitTimesheet = false dates
@@ -227,10 +235,8 @@ public class WeeklyTimeSheetReviewService {
             boolean isLeave = holiday.get("isLeave") instanceof Boolean &&
                             (Boolean) holiday.get("isLeave");
 
-            // Apply your rules
-            BigDecimal hours = isLeave ?
-                    BigDecimal.valueOf(8) : // Leave
-                    BigDecimal.ZERO;        
+            // Apply configurable settings
+            BigDecimal hours = isLeave ? leaveHrs : BigDecimal.ZERO;
 
             TimeSheet newSheet = new TimeSheet();
             newSheet.setUserId(userId);
