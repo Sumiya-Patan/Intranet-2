@@ -1,5 +1,6 @@
 package com.intranet.service;
 
+import com.intranet.dto.ReviewedTimesheetAuditDTO;
 import com.intranet.dto.TimeSheetBulkReviewRequestDTO;
 import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
@@ -16,6 +17,8 @@ import com.intranet.service.email.managerReviews.TimeSheetNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -293,7 +296,8 @@ public class TimeSheetReviewService {
         boolean allApproved = weekTimeSheets.stream()
                 .allMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED);
         boolean anyApproved = weekTimeSheets.stream()
-                .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
+                .anyMatch(ts -> ts.getStatus() == TimeSheet.Status.APPROVED
+                             || ts.getStatus() == TimeSheet.Status.PARTIALLY_APPROVED);
     
 
         WeeklyTimeSheetReview.Status weeklyStatus;
@@ -476,5 +480,60 @@ public class TimeSheetReviewService {
         sendReviewNotificationEmails(managerId, dto, sheets);
 
         return dto.getStatus() + " " + sheets.size() + " internal timesheets.";
+    }
+
+    /**
+     * Audit view: list every TimeSheetReview made by this manager, filterable
+     * by reviewed user, week-date range, and review status. Pending/Submitted
+     * reviews are excluded at the controller layer — this method trusts the
+     * statuses passed in.
+     */
+    public Page<ReviewedTimesheetAuditDTO> getReviewedTimesheetsForManager(
+            Long managerId,
+            Long userId,
+            LocalDate startDate,
+            LocalDate endDate,
+            List<TimeSheetReview.Status> statuses,
+            String authHeader,
+            Pageable pageable) {
+
+        Page<TimeSheetReview> page = reviewRepo.findReviewsByManagerWithFilters(
+                managerId, userId, startDate, endDate, statuses, pageable);
+
+        if (page.isEmpty()) {
+            return page.map(r -> ReviewedTimesheetAuditDTO.builder().build());
+        }
+
+        Map<Long, Map<String, Object>> userDir;
+        try {
+            userDir = userDirectoryService.fetchAllUsers(authHeader);
+        } catch (Exception e) {
+            userDir = Collections.emptyMap();
+        }
+        final Map<Long, Map<String, Object>> users = userDir;
+
+        return page.map(review -> {
+            WeekInfo week = review.getWeekInfo();
+            TimeSheet ts = review.getTimeSheet();
+            Map<String, Object> userInfo = users.get(review.getUserId());
+
+            return ReviewedTimesheetAuditDTO.builder()
+                    .reviewId(review.getId())
+                    .userId(review.getUserId())
+                    .userName(userInfo != null && userInfo.get("name") != null
+                            ? userInfo.get("name").toString() : null)
+                    .userEmail(userInfo != null && userInfo.get("email") != null
+                            ? userInfo.get("email").toString() : null)
+                    .weekId(week != null ? week.getId() : null)
+                    .weekStartDate(week != null ? week.getStartDate() : null)
+                    .weekEndDate(week != null ? week.getEndDate() : null)
+                    .timesheetId(ts != null ? ts.getId() : null)
+                    .workDate(ts != null ? ts.getWorkDate() : null)
+                    .hoursWorked(ts != null ? ts.getHoursWorked() : null)
+                    .status(review.getStatus() != null ? review.getStatus().name() : null)
+                    .comments(review.getComments())
+                    .reviewedAt(review.getReviewedAt())
+                    .build();
+        });
     }
 }

@@ -46,7 +46,11 @@ public class DashboardController {
     ) 
     {
         if (user.getId() == null) {
-            return ResponseEntity.badRequest().body("User ID cannot be null");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "User ID cannot be null",
+                    "data", Map.of()
+            ));
         }
 
         LocalDate now = LocalDate.now();
@@ -56,7 +60,11 @@ public class DashboardController {
         // Fetch timesheets for user in current month
         List<TimeSheet> timesheets = timeSheetRepo.findByUserIdAndWorkDateBetween(user.getId(), startOfMonth, endOfMonth);
         if (timesheets.isEmpty()) {
-            return ResponseEntity.ok("No timesheets found for current month");
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "No timesheets found for current month",
+                    "data", Map.of("totalHours", "0")
+            ));
         }
 
         // Collect all hoursWorked values
@@ -67,7 +75,11 @@ public class DashboardController {
         // Sum hours using TimeUtil
         BigDecimal totalHours = TimeUtil.sumHours(hoursList);
 
-        return ResponseEntity.ok(Map.of("totalHours", totalHours.toPlainString()));
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Total hours fetched successfully",
+                "data", Map.of("totalHours", totalHours.toPlainString())
+        ));
     }
     
 
@@ -115,4 +127,28 @@ public class DashboardController {
         );
     }
 
+    @GetMapping("/summary/dateRangeMonths")
+    @Operation(summary = "Get summary for the date range months window")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getDateRangeMonthsSummary(
+            @CurrentUser UserDTO user,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+
+        if (startDate == null) {
+            startDate = LocalDate.now().withDayOfMonth(1);
+        }
+        if (endDate == null) {
+            endDate = LocalDate.now().with(TemporalAdjusters.lastDayOfMonth());
+        }
+
+        return ResponseEntity.ok(
+                dashboardService.getDashboardSummary(
+                        user.getId(),
+                        startDate,
+                        endDate
+                )
+        );
+    }
 }
