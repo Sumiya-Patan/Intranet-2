@@ -45,6 +45,7 @@ public class DashboardController {
         @CurrentUser UserDTO user
     ) 
     {
+     try{
         if (user.getId() == null) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
@@ -80,6 +81,15 @@ public class DashboardController {
                 "message", "Total hours fetched successfully",
                 "data", Map.of("totalHours", totalHours.toPlainString())
         ));
+    }
+    catch(Exception e){
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "Error fetching total hours",
+                "data", Map.of()
+        ));
+    }
+
     }
     
 
