@@ -115,4 +115,28 @@ public class DashboardController {
         );
     }
 
+    @GetMapping("/summary/dateRangeMonths")
+    @Operation(summary = "Get summary for the date range months window")
+    @PreAuthorize("hasAuthority('EDIT_TIMESHEET') or hasAuthority('APPROVE_TIMESHEET')")
+    public ResponseEntity<?> getDateRangeMonthsSummary(
+            @CurrentUser UserDTO user,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+
+        if (startDate == null) {
+            startDate = LocalDate.now().withDayOfMonth(1);
+        }
+        if (endDate == null) {
+            endDate = LocalDate.now().with(TemporalAdjusters.lastDayOfMonth());
+        }
+
+        return ResponseEntity.ok(
+                dashboardService.getDashboardSummary(
+                        user.getId(),
+                        startDate,
+                        endDate
+                )
+        );
+    }
 }
