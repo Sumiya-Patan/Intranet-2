@@ -158,7 +158,7 @@ public class WeeklySummaryService {
                 // CASE A — No review → show default admin pending
                 actionStatusList.add(new ActionStatusDTO(
                         9999L,
-                        "Timesheet Admin",
+                        "Timesheet Admin/Reporting Manager",
                         "Pending",
                         null
                 ));
