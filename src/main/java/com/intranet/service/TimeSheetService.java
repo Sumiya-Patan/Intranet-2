@@ -24,6 +24,7 @@ import com.intranet.repository.WeekInfoRepo;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +55,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TimeSheetService {
 
     private final TimeSheetRepo timeSheetRepository;
@@ -299,57 +301,59 @@ public class TimeSheetService {
     }
     
     public List<ProjectTaskView> getUserTaskView(Long userId) {
-        // 🔹 Step 1: Call PMS API dynamically using configured base URL
-        String url = String.format("%s/tasks/user/%d/tasks", pmsBaseUrl, userId);
-
-        ResponseEntity<List<Map<String, Object>>> response =
-                restTemplate.exchange(
-                        url,
-                        HttpMethod.GET,
-                        buildEntityWithAuth(),
-                        new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-                );
-
-        List<Map<String, Object>> taskData = response.getBody();
-        if (taskData == null || taskData.isEmpty()) {
-            taskData = Collections.emptyList();
-        }
-
-        // 🔹 Step 2: Group external PMS tasks by projectId
+        // 🔹 Step 1+2: Try to fetch & group PMS tasks. On ANY failure, fall back to internal-only.
         Map<Long, ProjectTaskView> projectMap = new LinkedHashMap<>();
+        try {
+            String url = String.format("%s/tasks/user/%d/tasks", pmsBaseUrl, userId);
 
-        for (Map<String, Object> task : taskData) {
-            Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
-            String taskName = (String) task.get("title");
-            String description = (String) task.get("description");
+            ResponseEntity<List<Map<String, Object>>> response =
+                    restTemplate.exchange(
+                            url,
+                            HttpMethod.GET,
+                            buildEntityWithAuth(),
+                            new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+                    );
 
-            // Extract project info safely
-            Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
-            Long projectId = null;
-            final String projectName;
+            List<Map<String, Object>> taskData = response.getBody();
+            if (taskData == null) {
+                taskData = Collections.emptyList();
+            }
 
-            if (projectObj != null) {
-                Object idObj = projectObj.get("id");
-                if (idObj instanceof Number) {
-                    projectId = ((Number) idObj).longValue();
+            for (Map<String, Object> task : taskData) {
+                Long taskId = task.get("id") != null ? ((Number) task.get("id")).longValue() : null;
+                String taskName = (String) task.get("title");
+                String description = (String) task.get("description");
+
+                Map<String, Object> projectObj = (Map<String, Object>) task.get("project");
+                Long projectId = null;
+                final String projectName;
+
+                if (projectObj != null) {
+                    Object idObj = projectObj.get("id");
+                    if (idObj instanceof Number) {
+                        projectId = ((Number) idObj).longValue();
+                    }
+                    projectName = (String) projectObj.get("name");
+                } else {
+                    projectName = null;
                 }
-                projectName = (String) projectObj.get("name");
-            } else {
-                projectName = null;
+
+                String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
+                String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
+                boolean isBillable = task.get("billable") != null && (Boolean) task.get("billable");
+
+                TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime, isBillable);
+
+                if (projectId != null) {
+                    projectMap
+                        .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
+                        .getTasks()
+                        .add(taskDTO);
+                }
             }
-
-            String startTime = task.get("startDate") != null ? task.get("startDate").toString() : null;
-            String endTime = task.get("endDate") != null ? task.get("endDate").toString() : null;
-            boolean isBillable = task.get("billable") != null && (Boolean) task.get("billable");
-
-            TaskDTO taskDTO = new TaskDTO(taskId, taskName, description, startTime, endTime, isBillable);
-
-            if (projectId != null) {
-                projectMap
-                    .computeIfAbsent(projectId, pid -> new ProjectTaskView(pid, projectName, new ArrayList<>()))
-                    .getTasks()
-                    .add(taskDTO);
-            }
+        } catch (Exception ex) {
+            log.warn("PMS task fetch failed for userId={}, returning internal projects only. Reason: {}",
+                    userId, ex.getMessage());
         }
 
         // 🔹 Step 3: Fetch Internal Projects from DB

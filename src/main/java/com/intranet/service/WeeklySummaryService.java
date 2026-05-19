@@ -158,8 +158,9 @@ public class WeeklySummaryService {
                 // CASE A — No review → show default admin pending
                 actionStatusList.add(new ActionStatusDTO(
                         9999L,
-                        "Timesheet Admin",
-                        "Pending"
+                        "Timesheet Admin/Reporting Manager",
+                        "Pending",
+                        null
                 ));
             } else {
 
@@ -173,7 +174,8 @@ public class WeeklySummaryService {
                 actionStatusList.add(new ActionStatusDTO(
                         review.getManagerId(),
                         fetchUserFullName(review.getManagerId()),
-                        status
+                        status,
+                        review.getStatus() == TimeSheetReview.Status.REJECTED ? review.getComments() : null
                 ));
             }
 
@@ -208,7 +210,10 @@ public class WeeklySummaryService {
                 boolean exists = actionStatusList.stream()
                         .anyMatch(a -> a.getApproverId().equals(managerId));
                 if (!exists) {
-                    actionStatusList.add(new ActionStatusDTO(managerId, managerName, action));
+                    String reviewComments = "REJECTED".equalsIgnoreCase(action)
+                            ? reviewOpt.map(TimeSheetReview::getComments).orElse(null)
+                            : null;
+                    actionStatusList.add(new ActionStatusDTO(managerId, managerName, action, reviewComments));
                 }
             }
         
@@ -272,7 +277,7 @@ public class WeeklySummaryService {
 
             if (actionStatusList.isEmpty()) {
                 overallStatus = "APPROVED";
-                actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "APPROVED"));
+                actionStatusList.add(new ActionStatusDTO(99L, "Supervisor Mock", "APPROVED", null));
                     }
              else if (anyRejected) {
                         overallStatus = "REJECTED";
