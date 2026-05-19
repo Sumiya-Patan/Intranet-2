@@ -326,14 +326,28 @@ public class InternalWeeklySummaryService {
                     w.setTotalHours(totalHours);
                     w.setTimesheets(tsDtos);
 
-                    // Week Status Logic
+                    // Week Status Logic.
+                    // After a partial-reject + resubmit, a week can mix APPROVED days
+                    // with SUBMITTED days that still need review — surface that as
+                    // PARTIALLY_APPROVED so the admin/RM frontend keeps the action
+                    // buttons visible (it would otherwise hide them on plain "APPROVED").
                     Set<String> statuses = tsDtos.stream()
                             .map(TimeSheetSummaryDTO::getStatus)
                             .collect(Collectors.toSet());
 
-                    if (statuses.contains("REJECTED")) w.setWeeklyStatus("REJECTED");
-                    else if (statuses.contains("APPROVED")) w.setWeeklyStatus("APPROVED");
-                    else w.setWeeklyStatus("SUBMITTED");
+                    boolean hasRejected  = statuses.contains("REJECTED");
+                    boolean hasApproved  = statuses.contains("APPROVED");
+                    boolean hasSubmitted = statuses.contains("SUBMITTED");
+
+                    if (hasRejected) {
+                        w.setWeeklyStatus("REJECTED");
+                    } else if (hasApproved && hasSubmitted) {
+                        w.setWeeklyStatus("PARTIALLY_APPROVED");
+                    } else if (hasApproved) {
+                        w.setWeeklyStatus("APPROVED");
+                    } else {
+                        w.setWeeklyStatus("SUBMITTED");
+                    }
 
                     return w;
                 })
