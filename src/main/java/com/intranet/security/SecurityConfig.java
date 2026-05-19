@@ -3,8 +3,10 @@ package com.intranet.security;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -13,6 +15,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -22,6 +27,29 @@ import org.springframework.security.web.SecurityFilterChain;
   jsr250Enabled = true
 )
 public class SecurityConfig {
+
+  /**
+   * Comma-separated list of origins permitted by CORS.
+   * Configure per environment via `app.cors.allowed-origins` in application.properties /
+   * application-{env}.properties. Defaults to the Vite dev server.
+   */
+  @Value("${app.cors.allowed-origins:http://localhost:5173}")
+  private String allowedOrigins;
+
+  @Bean
+  public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration cfg = new CorsConfiguration();
+    cfg.setAllowedOrigins(List.of(allowedOrigins.split("\\s*,\\s*")));
+    cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
+    cfg.setExposedHeaders(List.of("Authorization"));
+    cfg.setAllowCredentials(true);
+    cfg.setMaxAge(3600L);
+
+    UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
+    src.registerCorsConfiguration("/**", cfg);
+    return src;
+  }
 
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
