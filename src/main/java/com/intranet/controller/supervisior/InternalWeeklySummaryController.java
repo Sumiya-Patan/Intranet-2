@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/timesheets")
 @RequiredArgsConstructor
-@CrossOrigin(allowedHeaders = "*", origins = "*")
 public class InternalWeeklySummaryController {
 
     private final InternalWeeklySummaryService internalWeeklyService;

@@ -18,7 +18,6 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/api/utilization")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 @Slf4j
 public class UtilizationReportingController {
 

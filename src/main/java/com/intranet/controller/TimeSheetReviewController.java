@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/timesheets")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*",allowedHeaders = "*")
 public class TimeSheetReviewController {
 
     private static final Set<TimeSheetReview.Status> ALLOWED_AUDIT_STATUSES =

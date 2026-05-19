@@ -27,12 +27,14 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.intranet.dto.HolidayDTO;
 import com.intranet.dto.email.WeeklySubmissionEmailDTO;
+import com.intranet.entity.InternalProject;
 import com.intranet.entity.TimeSheet;
 import com.intranet.entity.TimeSheetOnHolidaysType;
 import com.intranet.entity.TimeSheetReview;
 import com.intranet.entity.TimesheetSettings;
 import com.intranet.entity.WeekInfo;
 import com.intranet.entity.WeeklyTimeSheetReview;
+import com.intranet.repository.InternalProjectRepo;
 import com.intranet.repository.TimeSheetOnHolidayTypeRepo;
 import com.intranet.repository.TimeSheetRepo;
 import com.intranet.repository.TimeSheetReviewRepo;
@@ -55,6 +57,7 @@ public class WeeklyTimeSheetReviewService {
         private final HolidayExcludeUsersService holidayExcludeUsersService;
         private final TimeSheetOnHolidayTypeRepo timeSheetOnHolidayTypeRepo;
         private final TimesheetSettingsService timesheetSettingsService;
+        private final InternalProjectRepo internalProjectRepo;
 
         @Value("${tms.api.base-url}")
         private String tmsBaseUrl;
@@ -291,10 +294,15 @@ public class WeeklyTimeSheetReviewService {
     review.setReviewedAt(LocalDateTime.now());
     weeklyReviewRepo.save(review);
 
-   
+
    // --------------------------------------------------------------
 // FINAL REVIEW UPDATE LOGIC BASED ON YOUR RULES
 // --------------------------------------------------------------
+
+    // Fetch internal-project IDs once so we can branch per timesheet on internal-only vs external.
+    Map<Long, List<InternalProject>> internalProjectMap =
+            internalProjectRepo.findAll().stream()
+                    .collect(Collectors.groupingBy(ip -> ip.getProjectId().longValue()));
 
     for (TimeSheet ts : timeSheets) {
 
@@ -312,23 +320,33 @@ public class WeeklyTimeSheetReviewService {
         continue; // do nothing
     }
 
-    // 3️⃣ RULE: REJECTED → FIX ONLY REJECTED REVIEWS + TS → SUBMITTED
+    // 3️⃣ RULE: REJECTED → reset reviews + TS → SUBMITTED
     if (ts.getStatus() == TimeSheet.Status.REJECTED) {
 
         List<TimeSheetReview> reviews = timeSheetReviewRepo.findByTimeSheet_Id(ts.getId());
 
-        for (TimeSheetReview r : reviews) {
+        boolean internalOnly = ts.getEntries() != null
+                && ts.getEntries().stream()
+                        .allMatch(e -> internalProjectMap.containsKey(e.getProjectId()));
 
-            // if (r.getStatus() == TimeSheetReview.Status.REJECTED) {
+        if (internalOnly) {
+            // Internal projects have a single admin/RM reviewer.
+            // Delete the stale review rows so the resubmitted day appears as a fresh
+            // SUBMITTED item (no previous-reviewer name lingering on the user-history
+            // tooltip and no "already reviewed" gating on the admin side).
+            if (!reviews.isEmpty()) {
+                timeSheetReviewRepo.deleteAll(reviews);
+            }
+        } else {
+            // External projects can have multiple reviewers (one per project owner).
+            // Keep the rows for audit, just mark them as SUBMITTED again so the
+            // owners see the day re-enter their queue.
+            for (TimeSheetReview r : reviews) {
                 r.setStatus(TimeSheetReview.Status.SUBMITTED);
                 r.setReviewedAt(LocalDateTime.now());
-            // }
-
-            // DO NOT touch APPROVED, SUBMITTED, or PENDING reviews
+            }
+            timeSheetReviewRepo.saveAll(reviews);
         }
-
-        // Save only changed reviews
-        timeSheetReviewRepo.saveAll(reviews);
 
         // Update timesheet
         ts.setStatus(TimeSheet.Status.SUBMITTED);

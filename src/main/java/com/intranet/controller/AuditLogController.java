@@ -20,7 +20,6 @@ import java.time.LocalTime;
 @RestController
 @RequestMapping("/api/audit-logs")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class AuditLogController {
 
     private final AuditLogService auditLogService;
